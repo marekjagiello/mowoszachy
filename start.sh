@@ -7,8 +7,9 @@ pkill -f "python3.*server.py $PORT" 2>/dev/null || true
 pkill -f "python3 server.py" 2>/dev/null || true
 
 echo "Uruchamianie MowoSzachy na porcie $PORT..."
-nohup python3 "$DIR/server.py" "$PORT" > /dev/null 2>&1 &
+nohup python3 "$DIR/server.py" "$PORT" </dev/null > /dev/null 2>&1 &
 SERVER_PID=$!
+disown $SERVER_PID 2>/dev/null || true
 echo "Serwer działa w tle (PID: $SERVER_PID)."
 sleep 1
 

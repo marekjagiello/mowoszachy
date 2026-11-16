@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=♞ MowoSzachy
+GenericName=Głosowy Asystent Szachowy
+Comment=Uruchamia serwer MowoSzachy i otwiera aplikację
+Exec=/bin/bash "/home/marek/ai projects/mowoszachy/launch_desktop.sh"
+Path=/home/marek/ai projects/mowoszachy
+Icon=/home/marek/ai projects/mowoszachy/assets/icon-512.png
+Terminal=false
+StartupNotify=true
+Categories=Game;BoardGame;
