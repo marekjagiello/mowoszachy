@@ -291,7 +291,6 @@ class MowoSzachyApp {
       chessboardWrapper: document.getElementById('chessboardWrapper'),
       boardAccordion: document.getElementById('boardAccordion'),
       boardToggle: document.getElementById('boardToggle'),
-      btnFullscreenBoard: document.getElementById('btnFullscreenBoard'),
       btnHeaderFullscreen: document.getElementById('btnHeaderFullscreen'),
       btnAuxFullscreen: document.getElementById('btnAuxFullscreen'),
       btnCloseFullscreen: document.getElementById('btnCloseFullscreen'),
@@ -1583,9 +1582,6 @@ class MowoSzachyApp {
     });
 
     // Fullscreen Board Toggle Buttons
-    if (this.el.btnFullscreenBoard) {
-      this.el.btnFullscreenBoard.addEventListener('click', () => this.enterFullscreenBoard());
-    }
     if (this.el.btnHeaderFullscreen) {
       this.el.btnHeaderFullscreen.addEventListener('click', (e) => {
         e.stopPropagation();
