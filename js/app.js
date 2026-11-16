@@ -36,6 +36,7 @@ const DEFAULT_SETTINGS = {
   soundAlert: true,
   autoFlipBoard: true,
   boardTheme: 'wood',          // 'wood' | 'zelda'
+  boardBgOpacity: 100,         // 0 - 100 (temporary test)
   engineDepth: 10,
   speechRate: 1.0,
   descriptionStyle: 'detailed',
@@ -115,12 +116,49 @@ class MowoSzachyApp {
     this.isBoardFlipped = this.settings.autoFlipBoard && (this.settings.playerColor === 'b');
     this.updateModeLabels();
     this.applyBoardTheme();
+
+    if (this.el.boardOpacitySlider) {
+      const opVal = this.settings.boardBgOpacity !== undefined ? this.settings.boardBgOpacity : 100;
+      this.el.boardOpacitySlider.value = opVal;
+      if (this.el.boardOpacityVal) {
+        this.el.boardOpacityVal.textContent = `${opVal}%`;
+      }
+      this.applyBoardBgOpacity(opVal);
+      this.updateOpacityPresetButtons(opVal);
+    }
   }
 
   applyBoardTheme() {
     const theme = this.settings.boardTheme || 'wood';
     this.el.chessboard.classList.remove('theme-wood', 'theme-zelda', 'theme-blue', 'theme-green');
     this.el.chessboard.classList.add(`theme-${theme}`);
+    const opVal = this.settings.boardBgOpacity !== undefined ? this.settings.boardBgOpacity : 100;
+    this.applyBoardBgOpacity(opVal);
+  }
+
+  applyBoardBgOpacity(val) {
+    const numericVal = parseInt(val, 10);
+    const opacity = (numericVal / 100).toFixed(2);
+    this.el.chessboard.style.setProperty('--board-bg-opacity', opacity);
+
+    // Delineate squares smoothly if texture is dimmed/removed
+    const fade = 1 - (numericVal / 100);
+    const lightAlpha = (0.28 * fade).toFixed(3);
+    const darkAlpha = (0.45 * fade).toFixed(3);
+    this.el.chessboard.style.setProperty('--square-light-bg', `rgba(226, 214, 181, ${lightAlpha})`);
+    this.el.chessboard.style.setProperty('--square-dark-bg', `rgba(15, 23, 42, ${darkAlpha})`);
+  }
+
+  updateOpacityPresetButtons(val) {
+    const numericVal = parseInt(val, 10);
+    const presetBtns = document.querySelectorAll('.btn-opacity-preset');
+    presetBtns.forEach(btn => {
+      if (parseInt(btn.dataset.val, 10) === numericVal) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
   }
 
   updateModeLabels() {
@@ -181,6 +219,8 @@ class MowoSzachyApp {
       chessboard: document.getElementById('chessboard'),
       boardAccordion: document.getElementById('boardAccordion'),
       boardToggle: document.getElementById('boardToggle'),
+      boardOpacitySlider: document.getElementById('boardOpacitySlider'),
+      boardOpacityVal: document.getElementById('boardOpacityVal'),
       btnUndoMove: document.getElementById('btnUndoMove'),
       btnNewGame: document.getElementById('btnNewGame'),
       btnFlipBoard: document.getElementById('btnFlipBoard'),
@@ -1238,6 +1278,38 @@ class MowoSzachyApp {
     this.el.boardToggle.addEventListener('click', () => {
       this.el.boardAccordion.classList.toggle('expanded');
     });
+
+    // Board Opacity Slider & Presets (Temporary test feature)
+    if (this.el.boardOpacitySlider) {
+      this.el.boardOpacitySlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        this.settings.boardBgOpacity = val;
+        if (this.el.boardOpacityVal) {
+          this.el.boardOpacityVal.textContent = `${val}%`;
+        }
+        this.applyBoardBgOpacity(val);
+        this.updateOpacityPresetButtons(val);
+      });
+
+      this.el.boardOpacitySlider.addEventListener('change', () => {
+        this.saveSettings();
+      });
+
+      const presetBtns = document.querySelectorAll('.btn-opacity-preset');
+      presetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const val = parseInt(btn.dataset.val, 10);
+          this.settings.boardBgOpacity = val;
+          this.el.boardOpacitySlider.value = val;
+          if (this.el.boardOpacityVal) {
+            this.el.boardOpacityVal.textContent = `${val}%`;
+          }
+          this.applyBoardBgOpacity(val);
+          this.updateOpacityPresetButtons(val);
+          this.saveSettings();
+        });
+      });
+    }
 
     // Settings Modal
     this.el.btnOpenSettings.addEventListener('click', () => {

@@ -390,8 +390,98 @@ body {
   transition: transform 0.2s ease;
 }
 
+/* Temporary board opacity control */
+.board-opacity-control {
+  width: 100%;
+  max-width: 350px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+}
+
+.board-opacity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.board-opacity-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.board-opacity-badge {
+  background: #2563eb;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-width: 44px;
+  text-align: center;
+}
+
+.board-opacity-slider-row {
+  display: flex;
+  align-items: center;
+}
+
+.board-opacity-slider {
+  flex: 1;
+  width: 100%;
+  height: 38px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.board-opacity-presets {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.btn-opacity-preset {
+  flex: 1;
+  background: var(--bg-accent);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 0;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  min-height: 36px;
+}
+
+.btn-opacity-preset:hover, .btn-opacity-preset:active {
+  background: var(--primary);
+  border-color: var(--primary-hover);
+  color: #ffffff;
+}
+
+.btn-opacity-preset.active {
+  background: #2563eb;
+  border-color: #60a5fa;
+  color: #ffffff;
+}
+
 /* Chessboard rendering */
 .board-container {
+  --board-bg-opacity: 1;
+  position: relative;
   width: 100%;
   max-width: 350px;
   aspect-ratio: 1 / 1;
@@ -402,33 +492,56 @@ body {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
-  background-image: url('../assets/board.jpg');
-  background-size: cover;
-  background-position: center;
+  background-color: #0f172a;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-.board-container.theme-wood {
+.board-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
   background-image: url('../assets/board.jpg');
+  background-size: cover;
+  background-position: center;
+  opacity: var(--board-bg-opacity, 1);
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.05s ease;
+}
+
+.board-container.theme-wood {
   border-color: #5a3e28;
 }
 
+.board-container.theme-wood::before {
+  background-image: url('../assets/board.jpg');
+}
+
 .board-container.theme-zelda {
-  background-image: url('../assets/board_zelda.jpg');
   border-color: #3b3a32;
   box-shadow: 0 6px 22px rgba(16, 185, 129, 0.22), 0 4px 16px rgba(0, 0, 0, 0.65);
 }
 
+.board-container.theme-zelda::before {
+  background-image: url('../assets/board_zelda.jpg');
+}
+
 .board-container.theme-blue {
-  background-image: url('../assets/board_blue.jpg');
   border-color: #2b394f;
   box-shadow: 0 6px 22px rgba(56, 189, 248, 0.22), 0 4px 16px rgba(0, 0, 0, 0.65);
 }
 
+.board-container.theme-blue::before {
+  background-image: url('../assets/board_blue.jpg');
+}
+
 .board-container.theme-green {
-  background-image: url('../assets/board_green.jpg');
   border-color: #2e4432;
   box-shadow: 0 6px 22px rgba(34, 197, 94, 0.22), 0 4px 16px rgba(0, 0, 0, 0.65);
+}
+
+.board-container.theme-green::before {
+  background-image: url('../assets/board_green.jpg');
 }
 
 .square {
@@ -437,16 +550,17 @@ body {
   justify-content: center;
   cursor: pointer;
   position: relative;
+  z-index: 1;
   user-select: none;
   background-color: transparent;
 }
 
 .square.light {
-  background-color: transparent;
+  background-color: var(--square-light-bg, transparent);
 }
 
 .square.dark {
-  background-color: transparent;
+  background-color: var(--square-dark-bg, transparent);
 }
 
 .square.selected {
