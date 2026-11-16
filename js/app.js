@@ -1077,8 +1077,8 @@ class MowoSzachyApp {
       const rank = parseInt(squareId[1], 10);
       const piece = board[8 - rank][fileIdx];
 
-      // Remove old piece span
-      const existing = sq.querySelector('.piece-symbol');
+      // Remove old piece element
+      const existing = sq.querySelector('.piece-symbol, .piece-img');
       if (existing) existing.remove();
 
       // Highlights
@@ -1092,11 +1092,12 @@ class MowoSzachyApp {
       }
 
       if (piece) {
-        const symbolKey = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
-        const span = document.createElement('span');
-        span.className = 'piece-symbol';
-        span.textContent = PIECE_SYMBOLS[symbolKey] || '';
-        sq.appendChild(span);
+        const img = document.createElement('img');
+        img.className = 'piece-img';
+        img.src = `assets/pieces/${piece.color}_${piece.type}.png`;
+        img.alt = `${piece.color === 'w' ? 'Biały' : 'Czarny'} ${PIECE_NAMES_PL[piece.type] || piece.type}`;
+        img.draggable = false;
+        sq.appendChild(img);
       }
     });
   }

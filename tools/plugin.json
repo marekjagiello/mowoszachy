@@ -1,0 +1,21 @@
+{
+  "name": "mowoszachy-toolkit",
+  "version": "1.0.0",
+  "description": "Narzędzia deweloperskie i strażnicy jakości dla asystenta fizycznych szachów MowoSzachy.",
+  "skills": [
+    ".agents/skills/mowoszachy-speech-eval",
+    ".agents/skills/mowoszachy-chess-logic",
+    ".agents/skills/mowoszachy-mobile-audit"
+  ],
+  "hooks": "tools/hooks/hooks.json",
+  "mcpServers": {
+    "chess-tools": {
+      "command": "python3",
+      "args": ["tools/mcp_chess_server.py"]
+    },
+    "mowoszachy-dev": {
+      "command": "python3",
+      "args": ["tools/mcp_dev_server.py"]
+    }
+  }
+}

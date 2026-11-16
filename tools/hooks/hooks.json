@@ -1,0 +1,28 @@
+{
+  "post-edit": [
+    {
+      "name": "Zero-Build Step Guard",
+      "command": "python3 tools/hooks/check_zero_build.py",
+      "description": "Zapewnia, że żaden agent nie utworzył package.json, node_modules lub plików bundlera."
+    },
+    {
+      "name": "JavaScript & Python Syntax Check",
+      "command": "python3 tools/hooks/check_syntax.py",
+      "description": "Szybka walidacja poprawności składni zmodyfikowanych skryptów."
+    }
+  ],
+  "pre-commit": [
+    {
+      "name": "Speech Phonetics Regression Suite",
+      "command": "python3 tools/test_speech_parser.py",
+      "description": "Uruchamia testy parsera fonetycznego przed zatwierdzeniem zmian w repozytorium."
+    }
+  ],
+  "on-turn-end": [
+    {
+      "name": "Console Log Health Check",
+      "command": "python3 tools/hooks/check_log_errors.py",
+      "description": "Sprawdza, czy w app_console.log nie pojawiły się błędy runtime zgłoszone przez przeglądarkę."
+    }
+  ]
+}
