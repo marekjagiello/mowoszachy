@@ -487,10 +487,36 @@
       </div>
 
       <div class="setting-group">
+        <label for="pieceNamingStyle">Nazewnictwo bierek lektora:</label>
+        <div class="setting-control">
+          <select id="pieceNamingStyle">
+            <option value="traditional">Oficjalne / Turniejowe (Skoczek, Goniec, Hetman)</option>
+            <option value="casual">Potoczne (Koń, Laufer, Królowa)</option>
+            <option value="dama">Klasyczne z Damą (Skoczek, Goniec, Dama)</option>
+            <option value="potoczne_dama">Potoczne z Damą (Koń, Laufer, Dama)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="setting-group">
         <label class="checkbox-label">
           <input type="checkbox" id="autoSpeakEngineMove" checked>
           <span>Automatycznie czytaj ruchy silnika na głos</span>
         </label>
+      </div>
+
+      <!-- Obsługiwane synonimy w mowie -->
+      <div class="settings-section-title">Rozpoznawanie mowy – Synonimy bierek</div>
+      <div class="setting-help-box">
+        <p class="help-box-tip">Możesz dyktować ruchy używając dowolnego z poniższych określeń (oraz ich form gramatycznych):</p>
+        <ul class="help-synonyms-list">
+          <li><strong>♞ Skoczek:</strong> skoczek, koń, konik, kucyk, rumak, knight</li>
+          <li><strong>♝ Goniec:</strong> goniec, laufer, strzelec, biskup, oficer, bishop</li>
+          <li><strong>♜ Wieża:</strong> wieża, wieżyczka, tura, baszta, rook</li>
+          <li><strong>♛ Hetman:</strong> hetman, dama, królowa, królówka, queen</li>
+          <li><strong>♚ Król:</strong> król, king</li>
+          <li><strong>♟ Pion:</strong> pion, pionek, piechur, żołnierz, pawn</li>
+        </ul>
       </div>
     </div>
   </div>

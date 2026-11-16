@@ -23,6 +23,7 @@ export class SettingsManager {
           if (!parsed.botName) parsed.botName = 'Janusz';
           if (parsed.engineElo === undefined) parsed.engineElo = 1500;
           if (parsed.engineDepth === undefined) parsed.engineDepth = 10;
+          if (!parsed.pieceNamingStyle) parsed.pieceNamingStyle = 'traditional';
           parsed.settingsVersion = 5;
         }
         return { ...DEFAULT_SETTINGS, ...parsed };

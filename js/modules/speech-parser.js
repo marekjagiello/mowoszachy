@@ -3,7 +3,7 @@
  * Fonetyczny parser mowy szachowej, normalizacja komend oraz generator opisów pozycji w języku polskim
  */
 
-import { PIECE_NAMES_PL } from './constants.js';
+import { PIECE_NAMES_PL, PIECE_NAMING_STYLES } from './constants.js';
 
 export function normalizePolishSpeech(raw) {
   let text = (raw || '').toLowerCase().trim();
@@ -26,36 +26,52 @@ export function normalizePolishSpeech(raw) {
 
   // Liczby słownie
   const numMap = {
-    jeden: '1', jedynka: '1',
-    dwa: '2', dwójka: '2', dwie: '2',
-    trzy: '3', trójka: '3',
-    cztery: '4', czwórka: '4',
-    pięć: '5', piec: '5', piątka: '5',
-    sześć: '6', szesc: '6', szóstka: '6',
-    siedem: '7', siódemka: '7',
-    osiem: '8', ósemka: '8'
+    jeden: '1', jedynka: '1', pierwsze: '1', pierwsza: '1', pierwszy: '1',
+    dwa: '2', dwójka: '2', dwie: '2', drugie: '2', druga: '2', drugi: '2',
+    trzy: '3', trójka: '3', trzecie: '3', trzecia: '3', trzeci: '3',
+    cztery: '4', czwórka: '4', czwarte: '4', czwarta: '4', czwarty: '4',
+    pięć: '5', piec: '5', piątka: '5', piatka: '5', piąte: '5', piate: '5', piąta: '5',
+    sześć: '6', szesc: '6', szóstka: '6', szostka: '6', szóste: '6', szoste: '6', szósta: '6',
+    siedem: '7', siódemka: '7', siodemka: '7', siódme: '7', siodme: '7', siódma: '7',
+    osiem: '8', ósemka: '8', osemka: '8', ósme: '8', osme: '8', ósma: '8'
   };
   for (const [word, num] of Object.entries(numMap)) {
     const reg = new RegExp(`\\b${word}\\b`, 'g');
     text = text.replace(reg, num);
   }
 
-  // Roszady
-  text = text.replace(/\b(długa roszada|duża roszada|roszada długa|roszada duża|zero zero zero)\b/g, 'O-O-O');
-  text = text.replace(/\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b/g, 'O-O');
+  // Roszady: długa roszada musi poprzedzać krótką
+  text = text.replace(/\b(długa roszada|długą roszadę|dluga roszada|dluga roszade|roszada długa|roszadę długą|duża roszada|dużą roszadę|duza roszada|duza roszade|roszada duża|roszadę dużą|zero zero zero|długo|dlugo)\b/g, 'O-O-O');
+  text = text.replace(/\b(krótka roszada|krótką roszadę|krotka roszada|krotka roszade|roszada krótka|roszadę krótką|mała roszada|małą roszadę|mala roszada|mala roszade|roszada mała|roszadę małą|zero zero|krótko|krotko)\b/g, 'O-O');
   text = text.replace(/\broszada\b/g, 'O-O');
 
-  // Nazwy bierek i synonimy
-  text = text.replace(/\b(skoczek|skoczka|skoczkiem|koń|konia|koniem|kucyk|kucyka|kucykiem)\b/g, 'N');
-  text = text.replace(/\b(goniec|gońca|gońcem|laufer|laufra|laufrem)\b/g, 'B');
-  text = text.replace(/\b(wieża|wieżę|wieżą|wieze)\b/g, 'R');
-  text = text.replace(/\b(hetman|hetmana|hetmanem|królowa|królową|dama|damę|damą)\b/g, 'Q');
-  text = text.replace(/\b(król|króla|królem)\b/g, 'K');
-  text = text.replace(/\b(pion|pionek|piona|pionka|pionem|pionkiem)\b/g, 'P');
+  // Nazwy bierek i synonimy (z uwzględnieniem odmian gramatycznych i zapożyczeń)
+  // Hetman / Dama / Królowa (Q) - musi być przed Królem, aby uniknąć kolizji z "król" w "królowa"
+  text = text.replace(/\b(hetman|hetmana|hetmanowi|hetmanem|hetmanie|hetmani|hetmanów|dama|damę|dame|damą|damo|damie|damy|dam|królowa|królową|królowej|królowe|królowo|krolowa|krolową|krolowej|krolowe|krolowo|królówka|królówkę|królówką|krolowka|krolowke|queen|kwin|kłin)\b/g, 'Q');
 
-  // Słowa posiłkowe i bicia
-  text = text.replace(/\b(na|do|w|z|pole|pola)\b/g, ' ');
-  text = text.replace(/\b(bije|zbija|bierze|bicia)\b/g, 'x');
+  // Król (K)
+  text = text.replace(/\b(król|krol|króla|krola|królowi|krolowi|królem|krolem|królu|krolu|king)\b/g, 'K');
+
+  // Skoczek / Koń / Konik / Kucyk / Rumak (N)
+  text = text.replace(/\b(skoczek|skoczka|skoczkowi|skoczkiem|skoczku|skoczki|skoczków|koń|kon|konia|koniowi|koniem|koniu|konie|koni|konik|konika|konikowi|konikiem|koniku|koniki|koników|kucyk|kucyka|kucykowi|kucykiem|kucyku|kucyki|kucyków|rumak|rumaka|rumakowi|rumakiem|rumaku|rumaki|rumaków|knight|najt)\b/g, 'N');
+
+  // Goniec / Laufer / Strzelec / Biskup / Oficer (B)
+  text = text.replace(/\b(goniec|gońca|gonca|gońcowi|goncowi|gońcem|goncem|gońcu|goncu|gońce|gońcy|goncy|laufer|laufra|laufrowi|laufrem|lauferem|laufru|laufry|laufrów|strzelec|strzelca|strzelcowi|strzelcem|strzelcu|strzelcy|strzelców|biskup|biskupa|biskupowi|biskupem|biskupie|biskupi|biskupów|oficer|oficera|oficerowi|oficerem|oficerze|oficerowie|oficerów|bishop)\b/g, 'B');
+
+  // Wieża / Wieżyczka / Tura / Baszta (R)
+  text = text.replace(/\b(wieża|wieza|wieżę|wieze|wieżą|wiezo|wieży|wiezy|wieże|wiezyczki|wieżyczka|wiezyczka|wieżyczkę|wiezyczke|wieżyczką|wieżyczki|wiezyczki|tura|turę|ture|turą|turo|tury|turze|baszta|basztę|baszte|basztą|baszto|baszcie|baszty|rook|ruk|rukiem)\b/g, 'R');
+
+  // Pion / Pionek / Piechur / Żołnierz (P)
+  text = text.replace(/\b(pion|piona|pionowi|pionem|pionie|piony|pionów|pionek|pionka|pionkowi|pionkiem|pionku|pionki|pionków|piechur|piechura|piechurowi|piechurem|piechurze|piechurzy|piechurów|żołnierz|zolnierz|żołnierza|zolnierza|żołnierzowi|zolnierzowi|żołnierzem|zolnierzem|żołnierze|zolnierze|żołnierzy|zolnierzy|pawn)\b/g, 'P');
+
+  // Czasowniki operacyjne gracza (np. "rusz konia", "zagraj skoczka", "przestaw damę", "idź pionkiem")
+  text = text.replace(/\b(rusz|rusza|ruszamy|zagraj|graj|przestaw|przestawia|postaw|stawia|idź|idzie|daj|daje)\b/g, ' ');
+
+  // Słowa posiłkowe, pola i promocje
+  text = text.replace(/\b(na|do|w|z|pole|pola|polu|promocja|promuje|promuję|przemiana|zamiana|zamień|zmień)\b/g, ' ');
+
+  // Bicia i zbicia
+  text = text.replace(/\b(bije|biję|bija|zbija|zbijam|bierze|biorę|bicia|zbić|bić|zabija|zabiera|ciacha|kasuje|pochłania)\b/g, 'x');
 
   // Łączenie rozdzielonej litery i cyfry (np. "e 4" -> "e4", "f 3" -> "f3")
   text = text.replace(/\b([a-h])\s+([1-8])\b/g, '$1$2');
@@ -101,18 +117,19 @@ export function isSpokenDrawProposal(text) {
   return drawRegex.test(text || '');
 }
 
-export function formatMoveToPolish(move) {
+export function formatMoveToPolish(move, pieceNamingStyle = 'traditional') {
   if (move.san === 'O-O') return 'krótka roszada';
   if (move.san === 'O-O-O') return 'długa roszada';
 
-  const pieceName = PIECE_NAMES_PL[move.piece || 'p'] || 'figura';
+  const names = PIECE_NAMING_STYLES[pieceNamingStyle] || PIECE_NAMES_PL;
+  const pieceName = names[move.piece || 'p'] || 'figura';
   const isCapture = move.flags && (move.flags.includes('c') || move.flags.includes('e'));
   const captureText = isCapture ? 'bije na' : 'na';
 
   let desc = `${pieceName} ${captureText} ${move.to}`;
 
   if (move.promotion) {
-    const promoName = PIECE_NAMES_PL[move.promotion] || 'hetman';
+    const promoName = names[move.promotion] || 'hetman';
     desc += `, promocja na ${promoName}`;
   }
 
@@ -122,11 +139,12 @@ export function formatMoveToPolish(move) {
   return desc;
 }
 
-export function describePositionInPolish(game) {
+export function describePositionInPolish(game, pieceNamingStyle = 'traditional') {
   const board = game.board();
   const whitePieces = [];
   const blackPieces = [];
   const order = ['k', 'q', 'r', 'b', 'n', 'p'];
+  const names = PIECE_NAMING_STYLES[pieceNamingStyle] || PIECE_NAMES_PL;
 
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
@@ -148,11 +166,11 @@ export function describePositionInPolish(game) {
     list.forEach(p => groups[p.type].push(p.square));
 
     const parts = [];
-    if (groups.k.length) parts.push(`król na ${groups.k.join(', ')}`);
-    if (groups.q.length) parts.push(`hetman na ${groups.q.join(', ')}`);
-    if (groups.r.length) parts.push(`wieża na ${groups.r.join(', ')}`);
-    if (groups.b.length) parts.push(`goniec na ${groups.b.join(', ')}`);
-    if (groups.n.length) parts.push(`skoczek na ${groups.n.join(', ')}`);
+    if (groups.k.length) parts.push(`${names.k} na ${groups.k.join(', ')}`);
+    if (groups.q.length) parts.push(`${names.q} na ${groups.q.join(', ')}`);
+    if (groups.r.length) parts.push(`${names.r} na ${groups.r.join(', ')}`);
+    if (groups.b.length) parts.push(`${names.b} na ${groups.b.join(', ')}`);
+    if (groups.n.length) parts.push(`${names.n} na ${groups.n.join(', ')}`);
     if (groups.p.length) parts.push(`pionki na ${groups.p.join(', ')}`);
     return parts.join('; ');
   };
@@ -191,9 +209,26 @@ export function findMatchingMove(clean, legalMoves) {
   if (targetSquare) {
     const candidates = legalMoves.filter(m => m.to === targetSquare);
 
+    // Specjalna obsługa promocji pionka, gdy podano figurę docelową promocji (np. "e8 Q", "P e8 Q", "e8 N")
+    const promoPiece = words.find(w => ['Q', 'R', 'B', 'N'].includes(w));
+    if (promoPiece && candidates.some(m => Boolean(m.promotion))) {
+      const promoCandidates = candidates.filter(m => m.promotion === promoPiece.toLowerCase());
+      if (promoCandidates.length === 1) return promoCandidates[0];
+      if (promoCandidates.length > 1) {
+        const disambig = promoCandidates.find(m => clean.includes(m.from[0]) || clean.includes(m.from[1]));
+        if (disambig) return disambig;
+        return promoCandidates[0];
+      }
+    }
+
     if (pieceSpecified) {
       const pieceType = pieceSpecified.toLowerCase();
-      const pieceCandidates = candidates.filter(m => m.piece === (pieceType === 'p' ? 'p' : pieceType));
+      let pieceCandidates = candidates.filter(m => m.piece === (pieceType === 'p' ? 'p' : pieceType));
+
+      // Jeśli nie ma figury tego typu, sprawdź czy chodziło o promocję na tę figurę
+      if (pieceCandidates.length === 0 && ['q', 'r', 'b', 'n'].includes(pieceType)) {
+        pieceCandidates = candidates.filter(m => m.promotion === pieceType);
+      }
 
       if (pieceCandidates.length === 1) {
         return pieceCandidates[0];

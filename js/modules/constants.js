@@ -3,13 +3,50 @@
  * Stałe, mapowania bierek oraz domyślne ustawienia gry
  */
 
-export const PIECE_NAMES_PL = {
-  p: 'pionek',
-  n: 'skoczek',
-  b: 'goniec',
-  r: 'wieża',
-  q: 'hetman',
-  k: 'król'
+export const PIECE_NAMING_STYLES = {
+  traditional: {
+    p: 'pionek',
+    n: 'skoczek',
+    b: 'goniec',
+    r: 'wieża',
+    q: 'hetman',
+    k: 'król'
+  },
+  casual: {
+    p: 'pionek',
+    n: 'koń',
+    b: 'laufer',
+    r: 'wieża',
+    q: 'królowa',
+    k: 'król'
+  },
+  dama: {
+    p: 'pionek',
+    n: 'skoczek',
+    b: 'goniec',
+    r: 'wieża',
+    q: 'dama',
+    k: 'król'
+  },
+  potoczne_dama: {
+    p: 'pionek',
+    n: 'koń',
+    b: 'laufer',
+    r: 'wieża',
+    q: 'dama',
+    k: 'król'
+  }
+};
+
+export const PIECE_NAMES_PL = PIECE_NAMING_STYLES.traditional;
+
+export const PIECE_SYNONYMS_INFO = {
+  n: ['skoczek', 'koń', 'konik', 'kucyk', 'rumak', 'knight'],
+  b: ['goniec', 'laufer', 'strzelec', 'biskup', 'oficer', 'bishop'],
+  r: ['wieża', 'wieżyczka', 'tura', 'baszta', 'rook'],
+  q: ['hetman', 'dama', 'królowa', 'królówka', 'queen'],
+  k: ['król', 'king'],
+  p: ['pion', 'pionek', 'piechur', 'żołnierz', 'pawn']
 };
 
 export const PIECE_SYMBOLS = {
@@ -35,6 +72,7 @@ export const DEFAULT_SETTINGS = {
   engineDepth: 10,             // 2 - 18 półruchów
   speechRate: 1.0,
   descriptionStyle: 'detailed',
+  pieceNamingStyle: 'traditional',  // 'traditional' | 'casual' | 'dama' | 'potoczne_dama'
   autoSpeakEngine: true,
   voiceIndex: -1,
   settingsVersion: 5

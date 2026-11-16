@@ -146,6 +146,10 @@ class MowoSzachyApp {
     this.tts.speak(text, priority, onComplete);
   }
 
+  formatMove(move) {
+    return formatMoveToPolish(move, this.settings.pieceNamingStyle || 'traditional');
+  }
+
   setDisplayText(text) {
     if (this.el.speechDisplayText) {
       this.el.speechDisplayText.textContent = text;
@@ -249,7 +253,7 @@ class MowoSzachyApp {
       rawLower.includes('poziom maks')
     ) return true;
     if (rawLower.match(/(?:ustaw|zmień)?\s*(?:poziom|ranking|elo)\s*(?:na)?\s*(\d{3,4})/i)) return true;
-    if (rawLower.includes('graj') || rawLower.includes('ruch silnika') || rawLower.includes('twój ruch')) return true;
+    if (/\b(twój ruch|ruch silnika|graj silnik|komputer graj|bot graj)\b/i.test(rawLower) || /^(?:graj|zagraj|ruch)$/i.test(rawLower)) return true;
 
     // Legalny ruch szachowy w bieżącej pozycji
     try {
@@ -385,7 +389,9 @@ class MowoSzachyApp {
         return;
       }
     }
-    if (rawLower.includes('graj') || rawLower.includes('ruch silnika') || rawLower.includes('twój ruch')) {
+    const isEngineCommand = /\b(twój ruch|ruch silnika|graj silnik|komputer graj|bot graj)\b/i.test(commandToProcess) ||
+                            /^(?:graj|zagraj|ruch)$/i.test(commandToProcess.trim());
+    if (isEngineCommand) {
       this.playEngineMove();
       return;
     }
@@ -495,11 +501,11 @@ class MowoSzachyApp {
         let plDesc = '';
         let moveSan = '';
         if (matchedMove) {
-          plDesc = formatMoveToPolish(matchedMove);
+          plDesc = this.formatMove(matchedMove);
           moveSan = matchedMove.san;
         } else {
           const pieceOnFrom = this.game.get(from);
-          plDesc = formatMoveToPolish({
+          plDesc = this.formatMove({
             from,
             to,
             piece: pieceOnFrom ? pieceOnFrom.type : 'p',
@@ -607,7 +613,7 @@ class MowoSzachyApp {
 
   handleMoveSuccess(move, isEngineMove) {
     this.updateUI();
-    const plMove = formatMoveToPolish(move);
+    const plMove = this.formatMove(move);
     this.el.lastMoveText.textContent = `Ostatni: ${move.san} (${plMove})`;
 
     if (this.isGameOver()) {
@@ -844,7 +850,7 @@ class MowoSzachyApp {
         this.updateLastMoveFromHistory();
         this.updateUI();
 
-        const plPlayer = formatMoveToPolish(playerMove);
+        const plPlayer = this.formatMove(playerMove);
         this.speak(`Cofnięto ruch silnika oraz Twój ruch ${plPlayer}. Twój ruch.`);
       } else {
         this.game.undo();
@@ -857,7 +863,7 @@ class MowoSzachyApp {
       if (undone) {
         this.updateLastMoveFromHistory();
         this.updateUI();
-        const plMove = formatMoveToPolish(undone);
+        const plMove = this.formatMove(undone);
         this.speak(`Cofnięto ruch ${plMove}. Ruch ${this.game.turn() === 'w' ? 'białych' : 'czarnych'}.`);
       } else {
         this.speak('Brak ruchów do cofnięcia.');
@@ -870,7 +876,7 @@ class MowoSzachyApp {
     if (history.length > 0) {
       const last = history[history.length - 1];
       this.lastMoveSquares = [last.from, last.to];
-      this.el.lastMoveText.textContent = `Ostatni: ${last.san} (${formatMoveToPolish(last)})`;
+      this.el.lastMoveText.textContent = `Ostatni: ${last.san} (${this.formatMove(last)})`;
     } else {
       this.lastMoveSquares = [];
       this.el.lastMoveText.textContent = 'Ostatni: —';
@@ -884,14 +890,14 @@ class MowoSzachyApp {
       const actor = (this.settings.gameMode === 'vs-engine' && last.color !== this.settings.playerColor)
         ? 'Silnik zagrał: '
         : 'Ostatni ruch: ';
-      this.speak(`${actor}${formatMoveToPolish(last)}`);
+      this.speak(`${actor}${this.formatMove(last)}`);
     } else {
       this.speak('Nie wykonano jeszcze żadnego ruchu w tej partii.');
     }
   }
 
   readFullPosition() {
-    const fullSpeech = describePositionInPolish(this.game);
+    const fullSpeech = describePositionInPolish(this.game, this.settings.pieceNamingStyle || 'traditional');
     this.speak(fullSpeech);
   }
 
@@ -1202,6 +1208,9 @@ class MowoSzachyApp {
     this.el.speechRate.value = this.settings.speechRate;
     this.el.speechRateVal.textContent = parseFloat(this.settings.speechRate).toFixed(2);
     this.el.descriptionStyle.value = this.settings.descriptionStyle;
+    if (this.el.pieceNamingStyle) {
+      this.el.pieceNamingStyle.value = this.settings.pieceNamingStyle || 'traditional';
+    }
     this.el.autoSpeakEngineMove.checked = this.settings.autoSpeakEngine;
 
     this.isBoardFlipped = this.settings.autoFlipBoard && (this.settings.playerColor === 'b');
@@ -1331,6 +1340,7 @@ class MowoSzachyApp {
       speechRate: document.getElementById('speechRate'),
       speechRateVal: document.getElementById('speechRateVal'),
       descriptionStyle: document.getElementById('descriptionStyle'),
+      pieceNamingStyle: document.getElementById('pieceNamingStyle'),
       autoSpeakEngineMove: document.getElementById('autoSpeakEngineMove'),
       pieceGlowWhiteSize: document.getElementById('pieceGlowWhiteSize'),
       pieceGlowWhiteSizeVal: document.getElementById('pieceGlowWhiteSizeVal'),
@@ -1659,6 +1669,13 @@ class MowoSzachyApp {
       this.settings.descriptionStyle = e.target.value;
       SettingsManager.save(this.settings);
     });
+
+    if (this.el.pieceNamingStyle) {
+      this.el.pieceNamingStyle.addEventListener('change', (e) => {
+        this.settings.pieceNamingStyle = e.target.value;
+        SettingsManager.save(this.settings);
+      });
+    }
 
     this.el.autoSpeakEngineMove.addEventListener('change', (e) => {
       this.settings.autoSpeakEngine = e.target.checked;
