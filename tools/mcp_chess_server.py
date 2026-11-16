@@ -33,6 +33,9 @@ TOOLS = [
 ]
 
 def handle_request(req):
+    if not isinstance(req, dict):
+        return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request: expected object"}}
+
     method = req.get("method")
     req_id = req.get("id")
 
@@ -56,13 +59,16 @@ def handle_request(req):
         # JSON-RPC notifications (e.g. notifications/initialized) must not yield a response
         return None
 
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
 
     if method == "tools/call":
-        params = req.get("params", {})
+        params = req.get("params") or {}
         name = params.get("name")
-        args = params.get("arguments", {})
+        args = params.get("arguments") or {}
 
         if name == "validate_fen":
             fen = args.get("fen", "")
@@ -99,9 +105,9 @@ def handle_request(req):
                 }
             }
 
-        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": "Method not found"}}
+        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Tool '{name}' not found"}}
 
-    return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+    return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}}
 
 def main():
     while True:
@@ -110,12 +116,20 @@ def main():
             break
         try:
             req = json.loads(line)
+        except Exception as e:
+            err = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": f"Parse error: {str(e)}"}}
+            sys.stdout.write(json.dumps(err) + "\n")
+            sys.stdout.flush()
+            continue
+
+        try:
             res = handle_request(req)
             if res is not None:
                 sys.stdout.write(json.dumps(res) + "\n")
                 sys.stdout.flush()
         except Exception as e:
-            err = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": str(e)}}
+            req_id = req.get("id") if isinstance(req, dict) else None
+            err = {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32603, "message": f"Internal error: {str(e)}"}}
             sys.stdout.write(json.dumps(err) + "\n")
             sys.stdout.flush()
 

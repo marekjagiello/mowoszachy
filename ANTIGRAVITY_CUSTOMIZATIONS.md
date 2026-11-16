@@ -181,8 +181,9 @@ def normalize_polish_speech(raw: str) -> str:
     for word, num in num_map.items():
         text = re.sub(rf'\b{word}\b', num, text)
         
-    text = re.sub(r'\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b', 'O-O', text)
+    # Castling phrases: long castling must precede short castling to avoid prefix shadowing ("zero zero zero")
     text = re.sub(r'\b(długa roszada|duża roszada|roszada długa|roszada duża|zero zero zero)\b', 'O-O-O', text)
+    text = re.sub(r'\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b', 'O-O', text)
     text = re.sub(r'\broszada\b', 'O-O', text)
     
     text = re.sub(r'\b(skoczek|skoczka|skoczkiem|koń|konia|koniem)\b', 'N', text)
@@ -206,6 +207,8 @@ TEST_CASES = [
     ("goniec bije na d5", "B x d5"),
     ("krótka roszada", "O-O"),
     ("długa roszada", "O-O-O"),
+    ("zero zero", "O-O"),
+    ("zero zero zero", "O-O-O"),
     ("dama d1", "Q d1"),
     ("503", "f3"),
     ("wieża bije na b7", "R x b7"),
@@ -215,18 +218,19 @@ TEST_CASES = [
 
 def run_tests():
     passed = 0
-    print(f"=== Uruchamianie {len(TEST_CASES)} testów fonetyki szachowej ===")
+    print(f"=== Uruchamianie {len(TEST_CASES)} testów fonetyki szachowej MowoSzachy ===")
     for raw, expected in TEST_CASES:
         actual = normalize_polish_speech(raw)
         if actual == expected:
-            print(f" [PASS] '{raw}' -> '{actual}'")
+            print(f"  [PASS] '{raw}' -> '{actual}'")
             passed += 1
         else:
-            print(f" [FAIL] '{raw}' -> Otrzymano: '{actual}', Oczekiwano: '{expected}'")
+            print(f"  [FAIL] '{raw}' -> Otrzymano: '{actual}', Oczekiwano: '{expected}'")
             
-    print(f"Wynik: {passed}/{len(TEST_CASES)} zaliczonych.")
+    print(f"Wynik testów fonetyki: {passed}/{len(TEST_CASES)} zaliczonych.")
     if passed != len(TEST_CASES):
         sys.exit(1)
+    return True
 
 if __name__ == '__main__':
     run_tests()
@@ -315,7 +319,7 @@ Poniższy skrypt `tools/workflows/verify_release.py` stanowi kompletny przepływ
 #!/usr/bin/env python3
 """
 tools/workflows/verify_release.py
-Orchestrates multi-agent release verification for MowoSzachy using Antigravity CLI.
+Orchestrates release verification for MowoSzachy using Antigravity CLI.
 Runs parallel checks:
   1. Zero-Build Integrity & Syntax Check
   2. Polish Speech Parser Regression
@@ -323,15 +327,18 @@ Runs parallel checks:
 """
 import subprocess
 import sys
-import json
+import os
 
-def run_step(name, cmd):
+def run_step(name, script_rel_path):
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+    full_path = os.path.join(root, script_rel_path)
     print(f"\n[*] Uruchamianie: {name}...")
-    res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    res = subprocess.run([sys.executable, full_path], capture_output=True, text=True)
     if res.returncode == 0:
         print(f"[+] {name}: SUKCES")
         if res.stdout.strip():
-            print(f"    {res.stdout.strip()[:200]}")
+            for line in res.stdout.strip().splitlines():
+                print(f"    {line}")
         return True
     else:
         print(f"[-] {name}: BŁĄD (Kod {res.returncode})")
@@ -345,20 +352,20 @@ def main():
     
     checks = [
         ("Weryfikacja reguły Zero-Build (brak package.json, bundlerów)", 
-         "python3 tools/hooks/check_zero_build.py"),
+         "tools/hooks/check_zero_build.py"),
         ("Sprawdzenie poprawności składni ES Modules i Pythona", 
-         "python3 tools/hooks/check_syntax.py"),
+         "tools/hooks/check_syntax.py"),
         ("Regresyjny benchmark fonetyczny mowy polskiej", 
-         "python3 tools/test_speech_parser.py"),
+         "tools/test_speech_parser.py"),
         ("Audyt minimalnych wymiarów pól dotykowych CSS (min. 48px)", 
-         "python3 tools/hooks/check_mobile_targets.py"),
-        ("Test łączności z lokalnym serwerem i logami", 
-         "curl -s -f http://localhost:8000/ > /dev/null || true")
+         "tools/hooks/check_mobile_targets.py"),
+        ("Weryfikacja logów konsoli przeglądarki", 
+         "tools/hooks/check_log_errors.py")
     ]
     
     failed = []
-    for name, cmd in checks:
-        if not run_step(name, cmd):
+    for name, script in checks:
+        if not run_step(name, script):
             failed.append(name)
             
     print("\n" + "=" * 60)
@@ -465,6 +472,9 @@ TOOLS = [
 ]
 
 def handle_request(req):
+    if not isinstance(req, dict):
+        return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request: expected object"}}
+
     method = req.get("method")
     req_id = req.get("id")
 
@@ -488,13 +498,16 @@ def handle_request(req):
         # JSON-RPC notifications (e.g. notifications/initialized) must not yield a response
         return None
 
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
 
     if method == "tools/call":
-        params = req.get("params", {})
+        params = req.get("params") or {}
         name = params.get("name")
-        args = params.get("arguments", {})
+        args = params.get("arguments") or {}
 
         if name == "validate_fen":
             fen = args.get("fen", "")
@@ -531,9 +544,9 @@ def handle_request(req):
                 }
             }
 
-        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": "Method not found"}}
+        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Tool '{name}' not found"}}
 
-    return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+    return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}}
 
 def main():
     while True:
@@ -542,12 +555,20 @@ def main():
             break
         try:
             req = json.loads(line)
+        except Exception as e:
+            err = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": f"Parse error: {str(e)}"}}
+            sys.stdout.write(json.dumps(err) + "\n")
+            sys.stdout.flush()
+            continue
+
+        try:
             res = handle_request(req)
             if res is not None:
                 sys.stdout.write(json.dumps(res) + "\n")
                 sys.stdout.flush()
         except Exception as e:
-            err = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": str(e)}}
+            req_id = req.get("id") if isinstance(req, dict) else None
+            err = {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32603, "message": f"Internal error: {str(e)}"}}
             sys.stdout.write(json.dumps(err) + "\n")
             sys.stdout.flush()
 
@@ -613,6 +634,9 @@ def get_log_path():
     return os.path.join(root, 'app_console.log')
 
 def handle_request(req):
+    if not isinstance(req, dict):
+        return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request: expected object"}}
+
     method = req.get("method")
     req_id = req.get("id")
 
@@ -622,21 +646,30 @@ def handle_request(req):
             "id": req_id,
             "result": {
                 "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "mowoszachy-dev-mcp", "version": "1.0.0"}
+                "capabilities": {
+                    "tools": {}
+                },
+                "serverInfo": {
+                    "name": "mowoszachy-dev-mcp",
+                    "version": "1.0.0"
+                }
             }
         }
 
     if req_id is None:
+        # JSON-RPC notifications do not return a response
         return None
+
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
 
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
 
     if method == "tools/call":
-        params = req.get("params", {})
+        params = req.get("params") or {}
         name = params.get("name")
-        args = params.get("arguments", {})
+        args = params.get("arguments") or {}
 
         if name == "read_app_log":
             count = args.get("lines", 50)
@@ -648,7 +681,14 @@ def handle_request(req):
                     all_lines = f.readlines()
                 recent = all_lines[-count:] if count > 0 else all_lines
                 content = "".join(recent) or "(empty log)"
-            return {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": content}]}}
+
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "content": [{"type": "text", "text": content}]
+                }
+            }
 
         if name == "clear_app_log":
             log_path = get_log_path()
@@ -658,7 +698,14 @@ def handle_request(req):
                 msg = "Successfully cleared app_console.log."
             except Exception as e:
                 msg = f"Failed to clear log: {str(e)}"
-            return {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": msg}]}}
+
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "content": [{"type": "text", "text": msg}]
+                }
+            }
 
         if name == "get_server_status":
             port = args.get("port", 8000)
@@ -669,11 +716,18 @@ def handle_request(req):
                     status_text = f"Server is ONLINE at {url} (HTTP status: {resp.status})"
             except Exception as e:
                 status_text = f"Server is OFFLINE at {url} ({str(e)})"
-            return {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": status_text}]}}
 
-        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": "Method not found"}}
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "content": [{"type": "text", "text": status_text}]
+                }
+            }
 
-    return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Tool '{name}' not found"}}
+
+    return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}}
 
 def main():
     while True:
@@ -682,12 +736,20 @@ def main():
             break
         try:
             req = json.loads(line)
+        except Exception as e:
+            err = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": f"Parse error: {str(e)}"}}
+            sys.stdout.write(json.dumps(err) + "\n")
+            sys.stdout.flush()
+            continue
+
+        try:
             res = handle_request(req)
             if res is not None:
                 sys.stdout.write(json.dumps(res) + "\n")
                 sys.stdout.flush()
         except Exception as e:
-            err = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": str(e)}}
+            req_id = req.get("id") if isinstance(req, dict) else None
+            err = {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32603, "message": f"Internal error: {str(e)}"}}
             sys.stdout.write(json.dumps(err) + "\n")
             sys.stdout.flush()
 
@@ -867,7 +929,16 @@ def check_js(path):
 
 def main():
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+    
     py_files = ['server.py']
+    tools_dir = os.path.join(root, 'tools')
+    if os.path.exists(tools_dir):
+        for dirpath, _, filenames in os.walk(tools_dir):
+            for fn in filenames:
+                if fn.endswith('.py'):
+                    rel = os.path.relpath(os.path.join(dirpath, fn), root)
+                    py_files.append(rel)
+
     js_files = ['js/app.js']
 
     all_ok = True
@@ -883,7 +954,7 @@ def main():
 
     if not all_ok:
         sys.exit(1)
-    print("[✓] Syntax Check: Wszystkie skrypty poprawne.")
+    print("[✓] Syntax Check: Wszystkie kluczowe skrypty poprawne składniowo.")
 
 if __name__ == '__main__':
     main()
@@ -925,6 +996,47 @@ if __name__ == '__main__':
     main()
 ```
 
+#### 4. Strażnik Logów Konsoli: `tools/hooks/check_log_errors.py`
+Weryfikuje ostatnie wpisy w pliku telemetrycznym `app_console.log` pod kątem błędów krytycznych zgłoszonych asynchronicznie przez przeglądarkę mobilną (`on-turn-end`):
+
+```python
+#!/usr/bin/env python3
+"""
+tools/hooks/check_log_errors.py
+Inspects app_console.log for recent runtime errors reported by mobile browsers.
+"""
+import os
+import sys
+
+def main():
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+    log_path = os.path.join(root, 'app_console.log')
+
+    if not os.path.exists(log_path):
+        print("[✓] Log Check: Brak pliku app_console.log (czysty stan).")
+        sys.exit(0)
+
+    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+        lines = f.readlines()
+
+    recent_lines = lines[-50:]
+    critical_errors = []
+    for line in recent_lines:
+        if '[ERROR]' in line:
+            critical_errors.append(line.strip())
+
+    if critical_errors:
+        print(f"[!] WYKRYTO {len(critical_errors)} BŁĘDÓW W LOGACH PRZEGLĄDARKI:")
+        for err in critical_errors[-5:]:
+            print(f"    -> {err}")
+        print("[!] Proszę zweryfikować stan aplikacji przed zakończeniem prac.")
+    else:
+        print("[✓] Log Check: Ostatnie wpisy w app_console.log nie zawierają błędów krytycznych.")
+
+if __name__ == '__main__':
+    main()
+```
+
 ---
 
 ## 6. Priorytetyzowana Mapa Drogowa Wdrożenia (Roadmap & Action Checklist)
@@ -950,7 +1062,7 @@ Wdrożenie powyższych rekomendacji podzielono na 4 logiczne fazy według kryter
 
 #### Faza 2: Skille Domenowe w Repozytorium (Tydzień 1)
 - [ ] **R2.1**: Utworzyć folder `.agents/skills/mowoszachy-speech-eval/` i zapisać plik `SKILL.md`.
-- [ ] **R2.2**: Utworzyć skrypt benchmarku fonetycznego `tools/test_speech_parser.py` i zweryfikować jego przejście na 12 bazowych przypadkach testowych.
+- [ ] **R2.2**: Utworzyć skrypt benchmarku fonetycznego `tools/test_speech_parser.py` i zweryfikować jego przejście na 14 bazowych przypadkach testowych (w tym roszady "zero zero" i "zero zero zero").
 - [ ] **R2.3**: Utworzyć folder `.agents/skills/mowoszachy-chess-logic/` i skonfigurować wytyczne walidacji Position Describer w `SKILL.md`.
 - [ ] **R2.4**: Utworzyć folder `.agents/skills/mowoszachy-mobile-audit/` z wytycznymi audytu pól dotykowych.
 

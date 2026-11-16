@@ -451,9 +451,9 @@ class MowoSzachyApp {
       text = text.replace(reg, num);
     }
 
-    // Castling phrases
-    text = text.replace(/\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b/g, 'O-O');
+    // Castling phrases: long castling must precede short castling to avoid prefix shadowing ("zero zero zero")
     text = text.replace(/\b(długa roszada|duża roszada|roszada długa|roszada duża|zero zero zero)\b/g, 'O-O-O');
+    text = text.replace(/\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b/g, 'O-O');
     text = text.replace(/\broszada\b/g, 'O-O');
 
     // Piece names

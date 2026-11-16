@@ -34,8 +34,9 @@ def normalize_polish_speech(raw: str) -> str:
     for word, num in num_map.items():
         text = re.sub(rf'\b{word}\b', num, text)
         
-    text = re.sub(r'\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b', 'O-O', text)
+    # Castling phrases: long castling must precede short castling to avoid prefix shadowing ("zero zero zero")
     text = re.sub(r'\b(długa roszada|duża roszada|roszada długa|roszada duża|zero zero zero)\b', 'O-O-O', text)
+    text = re.sub(r'\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b', 'O-O', text)
     text = re.sub(r'\broszada\b', 'O-O', text)
     
     text = re.sub(r'\b(skoczek|skoczka|skoczkiem|koń|konia|koniem)\b', 'N', text)
@@ -59,6 +60,8 @@ TEST_CASES = [
     ("goniec bije na d5", "B x d5"),
     ("krótka roszada", "O-O"),
     ("długa roszada", "O-O-O"),
+    ("zero zero", "O-O"),
+    ("zero zero zero", "O-O-O"),
     ("dama d1", "Q d1"),
     ("503", "f3"),
     ("wieża bije na b7", "R x b7"),
