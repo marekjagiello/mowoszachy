@@ -57,6 +57,7 @@ class MowoSzachyApp {
     this.isEngineThinking = false;
     this.pendingEngineAction = null;
     this.engineTimer = null;
+    this.engineOnReadyCallback = null;
 
     // Board & Game State
     this.selectedSquare = null;
@@ -661,7 +662,17 @@ class MowoSzachyApp {
       this.undoMove();
       return;
     }
-    if (rawLower.includes('podpowiedz') || rawLower.includes('jaki ruch') || rawLower.includes('podpowiedź') || rawLower.includes('pomóż')) {
+    if (
+      rawLower.includes('podpowiedz') ||
+      rawLower.includes('podpowiedź') ||
+      rawLower.includes('jaki ruch') ||
+      rawLower.includes('co zagrać') ||
+      rawLower.includes('co mam zagrać') ||
+      rawLower.includes('co teraz') ||
+      rawLower.includes('najlepszy ruch') ||
+      rawLower.includes('pomóż') ||
+      rawLower.includes('co radzisz')
+    ) {
       this.requestEngineHint();
       return;
     }
@@ -837,6 +848,12 @@ class MowoSzachyApp {
       this.el.engineStatus.querySelector('.status-dot').className = 'status-dot';
       this.el.engineStatus.querySelector('.status-text').textContent = 'Stockfish';
 
+      if (typeof this.engineOnReadyCallback === 'function') {
+        const cb = this.engineOnReadyCallback;
+        this.engineOnReadyCallback = null;
+        cb();
+      }
+
       // If user started as Black and it's move 1, make engine start!
       if (this.settings.gameMode === 'vs-engine' && this.settings.playerColor === 'b' && this.game.history().length === 0) {
         setTimeout(() => this.playEngineMove(), 600);
@@ -863,24 +880,89 @@ class MowoSzachyApp {
 
       const parts = line.split(' ');
       const moveStr = parts[1];
+      const action = this.pendingEngineAction;
+      this.pendingEngineAction = null;
 
-      if (this.pendingEngineAction === 'play') {
-        this.pendingEngineAction = null;
+      const actionType = typeof action === 'string' ? action : (action ? action.type : null);
+      const actionFen = typeof action === 'object' && action ? action.fen : null;
+
+      // Jeśli pozycja zmieniła się w międzyczasie, ignoruj nieaktualny wynik
+      if (actionFen && actionFen !== this.game.fen()) {
+        remoteLog('INFO', `Ignored outdated bestmove ${moveStr} for old FEN`);
+        return;
+      }
+
+      if (actionType === 'play') {
         if (moveStr && moveStr !== '(none)') {
           const from = moveStr.substring(0, 2);
           const to = moveStr.substring(2, 4);
-          const promotion = moveStr.length > 4 ? moveStr[4] : undefined;
+          const promotion = moveStr.length > 4 ? moveStr[4].toLowerCase() : undefined;
           this.makeMove({ from, to, promotion }, true);
         }
-      } else if (this.pendingEngineAction === 'hint') {
-        this.pendingEngineAction = null;
+      } else if (actionType === 'hint') {
         if (moveStr && moveStr !== '(none)') {
           const from = moveStr.substring(0, 2);
           const to = moveStr.substring(2, 4);
-          const plDesc = this.formatMoveToPolish({ from, to });
-          this.speak(`Podpowiedź: najlepszy ruch to ${plDesc}.`);
+          const promotion = moveStr.length > 4 ? moveStr[4].toLowerCase() : undefined;
+
+          // Znajdź dokładny legalny ruch w chess.js dla pełnego obiektu ruchu (san, piece, flags)
+          const legalMoves = this.game.moves({ verbose: true });
+          const matchedMove = legalMoves.find(m =>
+            m.from === from &&
+            m.to === to &&
+            (!promotion || m.promotion === promotion)
+          );
+
+          let plDesc = '';
+          let moveSan = '';
+          if (matchedMove) {
+            plDesc = this.formatMoveToPolish(matchedMove);
+            moveSan = matchedMove.san;
+          } else {
+            const pieceOnFrom = this.game.get(from);
+            plDesc = this.formatMoveToPolish({
+              from,
+              to,
+              piece: pieceOnFrom ? pieceOnFrom.type : 'p',
+              promotion
+            });
+            moveSan = `${from}-${to}`;
+          }
+
+          let hintPrefix = 'Podpowiedź dla Ciebie: najlepszy ruch to';
+          if (this.settings.gameMode !== 'vs-engine') {
+            const colorPl = this.game.turn() === 'w' ? 'Białych' : 'Czarnych';
+            hintPrefix = `Podpowiedź dla ${colorPl}: najlepszy ruch to`;
+          }
+
+          const speechText = `${hintPrefix} ${plDesc}.`;
+          this.el.engineEvalText.textContent = `Podpowiedź: ${moveSan}`;
+          this.el.speechSubtitle.textContent = `💡 ${hintPrefix} ${plDesc} (${moveSan})`;
+
+          // Podświetl pole początkowe bierki na szachownicy
+          this.selectedSquare = from;
+          this.renderBoardPieces();
+
+          this.speak(speechText, false, () => {
+            if (this.settings.autoListenAfterEngine && !this.game.game_over()) {
+              setTimeout(() => this.startListening(), 250);
+            }
+          });
+        } else {
+          this.speak('Nie znalazłem dobrego ruchu w tej pozycji.');
         }
       }
+    }
+  }
+
+  stopAndQueueEngine(callback) {
+    if (!this.stockfishReady) return;
+    if (this.isEngineThinking) {
+      this.engineOnReadyCallback = callback;
+      this.stockfish.postMessage('stop');
+      this.stockfish.postMessage('isready');
+    } else {
+      callback();
     }
   }
 
@@ -889,23 +971,50 @@ class MowoSzachyApp {
       this.handleGameOver();
       return;
     }
-    if (this.isEngineThinking || !this.stockfishReady) return;
+    if (!this.stockfishReady) return;
 
-    this.isEngineThinking = true;
-    this.pendingEngineAction = 'play';
-    this.setSpeechIndicator(true, 'Silnik myśli...');
-    this.el.engineEvalText.textContent = 'Ocena: obliczanie...';
+    this.stopAndQueueEngine(() => {
+      const currentFen = this.game.fen();
+      this.isEngineThinking = true;
+      this.pendingEngineAction = { type: 'play', fen: currentFen };
+      this.setSpeechIndicator(true, 'Silnik myśli...');
+      this.el.engineEvalText.textContent = 'Ocena: obliczanie...';
 
-    this.stockfish.postMessage(`position fen ${this.game.fen()}`);
-    this.stockfish.postMessage(`go depth ${this.settings.engineDepth}`);
+      this.stockfish.postMessage(`position fen ${currentFen}`);
+      this.stockfish.postMessage(`go depth ${this.settings.engineDepth}`);
+    });
   }
 
   requestEngineHint() {
-    if (this.game.game_over() || !this.stockfishReady) return;
-    this.pendingEngineAction = 'hint';
-    this.setSpeechIndicator(true, 'Szukam najlepszego ruchu...');
-    this.stockfish.postMessage(`position fen ${this.game.fen()}`);
-    this.stockfish.postMessage(`go depth ${this.settings.engineDepth}`);
+    if (this.game.game_over()) {
+      this.speak('Partia jest już zakończona.');
+      return;
+    }
+    if (!this.stockfishReady) {
+      this.speak('Silnik szachowy nie jest jeszcze gotowy.');
+      return;
+    }
+
+    if (this.settings.gameMode === 'vs-engine') {
+      if (this.game.turn() !== this.settings.playerColor) {
+        this.speak('Teraz ruch silnika. Poczekaj na ruch przeciwnika.');
+        if (!this.isEngineThinking) {
+          this.playEngineMove();
+        }
+        return;
+      }
+    }
+
+    this.stopAndQueueEngine(() => {
+      const currentFen = this.game.fen();
+      this.isEngineThinking = true;
+      this.pendingEngineAction = { type: 'hint', fen: currentFen };
+      this.setSpeechIndicator(true, 'Szukam najlepszego ruchu...');
+      this.el.engineEvalText.textContent = 'Szukam podpowiedzi...';
+
+      this.stockfish.postMessage(`position fen ${currentFen}`);
+      this.stockfish.postMessage(`go depth ${this.settings.engineDepth}`);
+    });
   }
 
   // --- Move Execution & Game Loop ---
@@ -973,6 +1082,8 @@ class MowoSzachyApp {
 
     // Background evaluation update
     if (this.stockfishReady && !this.isEngineThinking) {
+      this.isEngineThinking = true;
+      this.pendingEngineAction = null;
       this.stockfish.postMessage(`position fen ${this.game.fen()}`);
       this.stockfish.postMessage(`go depth 6`);
     }
