@@ -506,8 +506,12 @@ class MowoSzachyApp {
 
     this.recognition.onerror = (event) => {
       remoteLog('WARN', 'Speech recognition error: ' + event.error);
-      if (event.error !== 'no-speech') {
-        this.speak('Nie dosłyszałem ruchu. Spróbuj ponownie.');
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        this.speak('Nie dosłyszałem ruchu. Spróbuj ponownie.', false, () => {
+          if (!this.game.game_over()) {
+            setTimeout(() => this.startListening(), 250);
+          }
+        });
       }
     };
 
@@ -519,19 +523,38 @@ class MowoSzachyApp {
     };
   }
 
+  startListening() {
+    if (!this.recognition) return;
+    try {
+      if (window.speechSynthesis && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+      if (this.isListening) {
+        try { this.recognition.abort(); } catch (e) {}
+        this.isListening = false;
+      }
+      this.recognition.start();
+    } catch (e) {
+      if (e.name !== 'InvalidStateError') {
+        remoteLog('WARN', 'Could not start recognition: ' + e.message);
+      }
+    }
+  }
+
+  stopListening() {
+    if (!this.recognition) return;
+    try {
+      this.recognition.stop();
+    } catch (e) {}
+    this.isListening = false;
+  }
+
   toggleListening() {
     if (!this.recognition) return;
     if (this.isListening) {
-      try { this.recognition.stop(); } catch (e) {}
+      this.stopListening();
     } else {
-      try {
-        if (window.speechSynthesis && window.speechSynthesis.speaking) {
-          window.speechSynthesis.cancel();
-        }
-        this.recognition.start();
-      } catch (e) {
-        remoteLog('WARN', 'Could not start recognition: ' + e.message);
-      }
+      this.startListening();
     }
   }
 
@@ -686,9 +709,20 @@ class MowoSzachyApp {
     let matchedMove = this.findMatchingMove(clean, legalMoves);
 
     if (matchedMove) {
-      this.makeMove(matchedMove, false);
+      const res = this.makeMove(matchedMove, false);
+      if (!res) {
+        this.speak('Niepoprawny ruch. Spróbuj jeszcze raz.', false, () => {
+          if (!this.game.game_over()) {
+            setTimeout(() => this.startListening(), 250);
+          }
+        });
+      }
     } else {
-      this.speak(`Rozpoznano: "${raw}". To nie jest poprawny ruch w tej pozycji. Spróbuj jeszcze raz.`);
+      this.speak(`Rozpoznano: "${raw}". To nie jest poprawny ruch w tej pozycji. Spróbuj jeszcze raz.`, false, () => {
+        if (!this.game.game_over()) {
+          setTimeout(() => this.startListening(), 250);
+        }
+      });
     }
   }
 
@@ -894,7 +928,7 @@ class MowoSzachyApp {
       if (this.settings.autoSpeakEngine) {
         this.speak(speech, false, () => {
           if (this.settings.autoListenAfterEngine && !this.game.game_over()) {
-            this.toggleListening();
+            setTimeout(() => this.startListening(), 250);
           }
         });
       } else {
