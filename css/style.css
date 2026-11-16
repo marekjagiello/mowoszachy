@@ -568,6 +568,10 @@ body {
   background-color: transparent;
 }
 
+.board-container.engine-turn .square {
+  cursor: default;
+}
+
 .square.light {
   background-color: var(--square-light-bg, transparent);
 }

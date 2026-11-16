@@ -902,6 +902,11 @@ class MowoSzachyApp {
     // 2. Legal chess move in current position
     try {
       if (!this.isGameOver()) {
+        if (this.settings.gameMode === 'vs-engine') {
+          if (this.isEngineThinking || Boolean(this.engineTimer) || this.game.turn() !== this.settings.playerColor) {
+            return false;
+          }
+        }
         const legalMoves = this.game.moves({ verbose: true });
         if (legalMoves.length > 0) {
           const clean = this.normalizePolishSpeech(text);
@@ -1200,6 +1205,16 @@ class MowoSzachyApp {
     if (legalMoves.length === 0 || this.isGameOver()) {
       this.speak('Partia jest już zakończona.');
       return;
+    }
+
+    // In vs-engine mode, player cannot make moves for the opponent or while engine is thinking
+    if (this.settings.gameMode === 'vs-engine') {
+      if (this.isEngineThinking || Boolean(this.engineTimer) || this.game.turn() !== this.settings.playerColor) {
+        const botName = this.settings.botName || 'Janusz';
+        const opponentColorPl = this.game.turn() === 'w' ? 'Białych' : 'Czarnych';
+        this.speak(`Teraz ruch ${opponentColorPl}. ${botName} myśli nad ruchem, poczekaj na swoją kolej.`);
+        return;
+      }
     }
 
     let matchedMove = this.findMatchingMove(clean, legalMoves);
@@ -1646,6 +1661,20 @@ class MowoSzachyApp {
 
   // --- Move Execution & Game Loop ---
   makeMove(moveObj, isEngine = false) {
+    if (this.isGameOver()) return false;
+
+    // In vs-engine mode, human moves are strictly restricted to the player's own turn and color
+    if (!isEngine && this.settings.gameMode === 'vs-engine') {
+      if (this.isEngineThinking || Boolean(this.engineTimer)) {
+        remoteLog('WARN', 'Blocked human move: Engine is currently thinking');
+        return false;
+      }
+      if (this.game.turn() !== this.settings.playerColor) {
+        remoteLog('WARN', `Blocked human move: Not player's turn (Turn: ${this.game.turn()}, Player: ${this.settings.playerColor})`);
+        return false;
+      }
+    }
+
     try {
       const res = this.game.move(moveObj);
       if (res) {
@@ -2144,8 +2173,23 @@ class MowoSzachyApp {
   }
 
   handleSquareClick(squareId) {
+    if (this.isGameOver()) return;
+
+    // In vs-engine mode, prevent player from interacting with the board on engine's turn or when thinking
+    if (this.settings.gameMode === 'vs-engine') {
+      if (this.isEngineThinking || Boolean(this.engineTimer) || this.game.turn() !== this.settings.playerColor) {
+        this.selectedSquare = null;
+        this.renderBoardPieces();
+        return;
+      }
+    }
+
     if (!this.selectedSquare) {
       const piece = this.game.get(squareId);
+      // In vs-engine mode, ensure player can only select pieces of their own color
+      if (this.settings.gameMode === 'vs-engine' && piece && piece.color !== this.settings.playerColor) {
+        return;
+      }
       if (piece && piece.color === this.game.turn()) {
         this.selectedSquare = squareId;
         this.renderBoardPieces();
@@ -2160,7 +2204,10 @@ class MowoSzachyApp {
         if (!move) {
           // If clicked another own piece, select that piece
           const piece = this.game.get(to);
-          if (piece && piece.color === this.game.turn()) {
+          const isOwnPiece = this.settings.gameMode === 'vs-engine'
+            ? (piece && piece.color === this.settings.playerColor && piece.color === this.game.turn())
+            : (piece && piece.color === this.game.turn());
+          if (isOwnPiece) {
             this.selectedSquare = to;
           }
         }
@@ -2173,6 +2220,15 @@ class MowoSzachyApp {
   updateUI() {
     const turn = this.game.turn();
     const isWhite = turn === 'w';
+
+    const isEngineTurn = this.settings.gameMode === 'vs-engine' &&
+      (turn !== this.settings.playerColor || this.isEngineThinking || Boolean(this.engineTimer));
+    if (this.el.chessboard) {
+      this.el.chessboard.classList.toggle('engine-turn', isEngineTurn);
+    }
+    if (isEngineTurn) {
+      this.selectedSquare = null;
+    }
 
     this.el.turnMarker.className = `piece-marker ${isWhite ? 'white' : 'black'}`;
     this.el.turnLabel.textContent = isWhite ? 'Ruch Białych' : 'Ruch Czarnych';
