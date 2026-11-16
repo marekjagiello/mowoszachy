@@ -76,6 +76,9 @@ class MowoSzachyApp {
     this.latestEval = null;    // { fen, type: 'cp'|'mate', evalScore, cp, mate }
     this.restartListeningTimer = null;
     this.currentVoice = null;
+    this.pendingVoiceTimer = null;
+    this.pendingVoiceBuffer = '';
+    this.isWaitingAfterWakeWord = false;
 
     // Load user settings or defaults
     this.settings = this.loadSettings();
@@ -568,6 +571,13 @@ class MowoSzachyApp {
       window.speechSynthesis.cancel();
     }
 
+    if (this.pendingVoiceTimer) {
+      clearTimeout(this.pendingVoiceTimer);
+      this.pendingVoiceTimer = null;
+    }
+    this.pendingVoiceBuffer = '';
+    this.isWaitingAfterWakeWord = false;
+
     // Temporarily pause recognition to prevent the bot from hearing itself
     if (this.recognition && this.isListening) {
       this.isTemporarilyPausedForTTS = true;
@@ -714,6 +724,12 @@ class MowoSzachyApp {
   stopListening() {
     this.isListeningRequested = false;
     if (this.restartListeningTimer) clearTimeout(this.restartListeningTimer);
+    if (this.pendingVoiceTimer) {
+      clearTimeout(this.pendingVoiceTimer);
+      this.pendingVoiceTimer = null;
+    }
+    this.pendingVoiceBuffer = '';
+    this.isWaitingAfterWakeWord = false;
     if (!this.recognition) return;
     try {
       this.recognition.stop();
@@ -828,43 +844,208 @@ class MowoSzachyApp {
     return text;
   }
 
+  isRecognizedCommandOrMove(text) {
+    if (!text || !text.trim()) return false;
+    const rawLower = text.toLowerCase().trim();
+
+    // 1. Spoken Application Commands
+    const drawRegex = /\b(remis|remisu|remisem|zróbmy remis|proponuj[eę]\s+remis|oferuj[eę]\s+remis|zgoda na remis|propozycja remisu)\b/i;
+    if (drawRegex.test(rawLower)) return true;
+
+    if (rawLower.includes('nowa partia') || rawLower.includes('zacznij od nowa') || rawLower.includes('zresetuj')) return true;
+    if (rawLower.includes('graj białymi') || rawLower.includes('zagraj białymi')) return true;
+    if (rawLower.includes('graj czarnymi') || rawLower.includes('zagraj czarnymi')) return true;
+    if (rawLower.includes('poddaję') || rawLower.includes('rezygnuję') || rawLower.includes('poddanie')) return true;
+    if (rawLower.includes('cofnij') || rawLower.includes('cofnij ruch') || rawLower.includes('wróć')) return true;
+    if (
+      rawLower.includes('podpowiedz') ||
+      rawLower.includes('podpowiedź') ||
+      rawLower.includes('jaki ruch') ||
+      rawLower.includes('co zagrać') ||
+      rawLower.includes('co mam zagrać') ||
+      rawLower.includes('co teraz') ||
+      rawLower.includes('najlepszy ruch') ||
+      rawLower.includes('pomóż') ||
+      rawLower.includes('co radzisz')
+    ) return true;
+    if (rawLower.includes('przeczytaj pozycję') || rawLower.includes('jaka pozycja') || rawLower.includes('czytaj pozycję') || rawLower.includes('stan gry')) return true;
+    if (rawLower.includes('powtórz') || rawLower.includes('ostatni ruch') || rawLower.includes('jaki był ruch') || rawLower.includes('co zagrałeś')) return true;
+    if (rawLower.includes('odwróć') && (rawLower.includes('szachownicę') || rawLower.includes('deskę'))) return true;
+    if (rawLower.includes('motyw zelda') || rawLower.includes('motyw fantasy')) return true;
+    if (rawLower.includes('motyw drewno') || rawLower.includes('motyw klasyczny')) return true;
+    if (rawLower.includes('motyw błękit') || rawLower.includes('motyw niebieski') || rawLower.includes('motyw blue')) return true;
+    if (rawLower.includes('motyw zieleń') || rawLower.includes('motyw zielony') || rawLower.includes('motyw green')) return true;
+    if (
+      rawLower.includes('jaki masz poziom') ||
+      rawLower.includes('jaki poziom') ||
+      rawLower.includes('jakie masz elo') ||
+      rawLower.includes('jaki masz ranking') ||
+      rawLower.includes('jaki ranking') ||
+      rawLower.includes('jakie elo')
+    ) return true;
+    if (
+      rawLower.includes('poziom początkujący') ||
+      rawLower.includes('poziom amator') ||
+      rawLower.includes('poziom nowicjusz') ||
+      rawLower.includes('poziom klubowy') ||
+      rawLower.includes('poziom średni') ||
+      rawLower.includes('poziom zaawansowany') ||
+      rawLower.includes('poziom ekspert') ||
+      rawLower.includes('poziom mistrz') ||
+      rawLower.includes('poziom arcymistrz') ||
+      rawLower.includes('poziom maksymalny') ||
+      rawLower.includes('poziom maks')
+    ) return true;
+    if (rawLower.match(/(?:ustaw|zmień)?\s*(?:poziom|ranking|elo)\s*(?:na)?\s*(\d{3,4})/i)) return true;
+    if (rawLower.includes('graj') || rawLower.includes('ruch silnika') || rawLower.includes('twój ruch')) return true;
+
+    // 2. Legal chess move in current position
+    try {
+      if (!this.isGameOver()) {
+        const legalMoves = this.game.moves({ verbose: true });
+        if (legalMoves.length > 0) {
+          const clean = this.normalizePolishSpeech(text);
+          const matched = this.findMatchingMove(clean, legalMoves);
+          if (matched) return true;
+        }
+      }
+    } catch (e) {}
+
+    return false;
+  }
+
   handleVoiceCommand(raw, bypassWakeWord = false) {
     if (!raw || !raw.trim()) return;
 
-    const botName = this.settings.botName || 'Janusz';
-    let commandToProcess = raw.trim();
-
-    if (!bypassWakeWord) {
-      const { hasBotName, command } = this.extractBotCommand(raw, botName);
-
-      // Check if wake word matched
-      if (!hasBotName) {
-        // If bot name was called within the last 10 seconds, allow followup without repeating the name
-        if (Date.now() < this.wakeWordArmedUntil) {
-          commandToProcess = raw.trim();
-          this.wakeWordArmedUntil = 0;
-        } else {
-          // Player is thinking aloud! Keep listening indefinitely, don't execute or complain.
-          remoteLog('INFO', `Ignored thinking aloud (no wake word "${botName}"): "${raw}"`);
-          this.setDisplayText(`(Myślisz na głos: "${raw}" — powiedz np. «${botName} e4» lub «${botName} proponuję remis»)`);
-          this.setSpeechIndicator(true, `Słucham (hasło: «${botName}»)...`);
-          return;
-        }
-      } else {
-        // Has bot name
-        if (!command) {
-          // Player just called the bot's name (e.g. "Janusz", "Januszu!")
-          this.wakeWordArmedUntil = Date.now() + 10000;
-          this.speak('Słucham! Jaki ruch?', false, () => {
-            if (this.isListeningRequested && !this.isGameOver()) {
-              setTimeout(() => this.startListening(), 250);
-            }
-          });
-          return;
-        }
-        commandToProcess = command;
-      }
+    if (bypassWakeWord) {
+      if (this.pendingVoiceTimer) clearTimeout(this.pendingVoiceTimer);
+      this.isWaitingAfterWakeWord = false;
+      this.pendingVoiceBuffer = '';
+      this.executeVoiceAction(raw.trim());
+      return;
     }
+
+    const botName = this.settings.botName || 'Janusz';
+    const trimmed = raw.trim();
+    const { hasBotName, command } = this.extractBotCommand(trimmed, botName);
+
+    // 1. If currently waiting after a previous wake-word invocation
+    if (this.isWaitingAfterWakeWord) {
+      if (this.pendingVoiceTimer) clearTimeout(this.pendingVoiceTimer);
+
+      // Append new recognized speech to the accumulation buffer
+      const newPart = hasBotName ? command : trimmed;
+      if (newPart) {
+        this.pendingVoiceBuffer = (this.pendingVoiceBuffer + ' ' + newPart).trim();
+      }
+
+      remoteLog('INFO', `Voice buffer updated: "${this.pendingVoiceBuffer}"`);
+
+      // If buffer now forms a complete valid move or command, execute immediately!
+      if (this.isRecognizedCommandOrMove(this.pendingVoiceBuffer)) {
+        const cmdToRun = this.pendingVoiceBuffer;
+        this.isWaitingAfterWakeWord = false;
+        this.pendingVoiceBuffer = '';
+        this.executeVoiceAction(cmdToRun);
+        return;
+      }
+
+      // Still incomplete (e.g. user said "pion" and is about to say "na e4"):
+      // Wait another 2.2 seconds before finalizing
+      this.setSpeechIndicator(true, `Słucham «${botName}»... powiedz ruch`);
+      this.pendingVoiceTimer = setTimeout(() => {
+        this.finishVoiceWait(botName);
+      }, 2200);
+      return;
+    }
+
+    // 2. Fresh speech input: check if wake word is present or armed
+    if (!hasBotName) {
+      // Check if bot was armed within the last 10 seconds (e.g. after bot said "Słucham! Jaki ruch?")
+      if (Date.now() < this.wakeWordArmedUntil) {
+        this.wakeWordArmedUntil = 0;
+
+        // If the speech is already a valid move or command, execute directly
+        if (this.isRecognizedCommandOrMove(trimmed)) {
+          this.executeVoiceAction(trimmed);
+          return;
+        }
+
+        // Otherwise start accumulating (e.g. user said "pion..." and paused)
+        this.isWaitingAfterWakeWord = true;
+        this.pendingVoiceBuffer = trimmed;
+        this.setSpeechIndicator(true, `Słucham «${botName}»... powiedz ruch`);
+        this.pendingVoiceTimer = setTimeout(() => {
+          this.finishVoiceWait(botName);
+        }, 2200);
+        return;
+      }
+
+      // Player is thinking aloud! Keep listening indefinitely, don't execute or complain.
+      remoteLog('INFO', `Ignored thinking aloud (no wake word "${botName}"): "${raw}"`);
+      this.setDisplayText(`(Myślisz na głos: "${raw}" — powiedz np. «${botName} e4» lub «${botName} proponuję remis»)`);
+      this.setSpeechIndicator(true, `Słucham (hasło: «${botName}»)...`);
+      return;
+    }
+
+    // 3. Bot name was explicitly spoken! (e.g. "Janusz" or "Janusz e4" or "Janusz pion...")
+    if (this.pendingVoiceTimer) clearTimeout(this.pendingVoiceTimer);
+
+    const cmd = (command || '').trim();
+
+    // If a full valid move or command was spoken in one go (e.g. "Janusz e4"), execute right away!
+    if (cmd && this.isRecognizedCommandOrMove(cmd)) {
+      this.isWaitingAfterWakeWord = false;
+      this.pendingVoiceBuffer = '';
+      this.executeVoiceAction(cmd);
+      return;
+    }
+
+    // If only the bot's name was said OR an incomplete move phrase, WAIT for the user's response!
+    this.isWaitingAfterWakeWord = true;
+    this.pendingVoiceBuffer = cmd; // Can be empty or partial ("pion")
+    remoteLog('INFO', `Wake word "${botName}" detected. Waiting for user command (buffer: "${this.pendingVoiceBuffer}")...`);
+
+    this.setSpeechIndicator(true, `Słucham «${botName}»... powiedz ruch`);
+    this.setDisplayText(`(Słucham bota «${botName}»... podaj ruch, np. «e4» lub «skoczek na f3»)`);
+
+    // Give the user comfortable 2.5 seconds to speak their move
+    this.pendingVoiceTimer = setTimeout(() => {
+      this.finishVoiceWait(botName);
+    }, 2500);
+  }
+
+  finishVoiceWait(botName) {
+    this.pendingVoiceTimer = null;
+    this.isWaitingAfterWakeWord = false;
+
+    const buffer = (this.pendingVoiceBuffer || '').trim();
+    this.pendingVoiceBuffer = '';
+
+    if (!buffer) {
+      // User only said the bot's name (e.g. "Janusz") and paused/waited
+      remoteLog('INFO', `Wake word timeout with empty buffer. Prompting user.`);
+      this.wakeWordArmedUntil = Date.now() + 10000;
+      this.speak('Słucham! Jaki ruch?', false, () => {
+        if (this.isListeningRequested && !this.isGameOver()) {
+          setTimeout(() => this.startListening(), 250);
+        }
+      });
+      return;
+    }
+
+    // Buffer has text, process it as the final command
+    remoteLog('INFO', `Processing buffered voice command: "${buffer}"`);
+    this.executeVoiceAction(buffer);
+  }
+
+  executeVoiceAction(commandToProcess) {
+    if (this.pendingVoiceTimer) {
+      clearTimeout(this.pendingVoiceTimer);
+      this.pendingVoiceTimer = null;
+    }
+    this.pendingVoiceBuffer = '';
+    this.isWaitingAfterWakeWord = false;
 
     const rawLower = commandToProcess.toLowerCase().trim();
 
@@ -1013,7 +1194,7 @@ class MowoSzachyApp {
 
     // 2. Parse as a chess move
     const clean = this.normalizePolishSpeech(commandToProcess);
-    remoteLog('INFO', `Speech parsed: "${raw}" -> "${commandToProcess}" -> "${clean}"`);
+    remoteLog('INFO', `Speech parsed to move: "${commandToProcess}" -> "${clean}"`);
 
     const legalMoves = this.game.moves({ verbose: true });
     if (legalMoves.length === 0 || this.isGameOver()) {
