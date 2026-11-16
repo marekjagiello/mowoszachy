@@ -119,7 +119,7 @@ class MowoSzachyApp {
 
   applyBoardTheme() {
     const theme = this.settings.boardTheme || 'wood';
-    this.el.chessboard.classList.remove('theme-wood', 'theme-zelda');
+    this.el.chessboard.classList.remove('theme-wood', 'theme-zelda', 'theme-blue', 'theme-green');
     this.el.chessboard.classList.add(`theme-${theme}`);
   }
 
@@ -530,6 +530,22 @@ class MowoSzachyApp {
       this.saveSettings();
       this.applyBoardTheme();
       this.speak('Zmieniono motyw szachownicy na klasyczne drewno.');
+      return;
+    }
+    if (rawLower.includes('motyw błękit') || rawLower.includes('motyw niebieski') || rawLower.includes('motyw blue')) {
+      this.settings.boardTheme = 'blue';
+      if (this.el.boardThemeSelect) this.el.boardThemeSelect.value = 'blue';
+      this.saveSettings();
+      this.applyBoardTheme();
+      this.speak('Zmieniono motyw szachownicy na błękitny marmur.');
+      return;
+    }
+    if (rawLower.includes('motyw zieleń') || rawLower.includes('motyw zielony') || rawLower.includes('motyw green')) {
+      this.settings.boardTheme = 'green';
+      if (this.el.boardThemeSelect) this.el.boardThemeSelect.value = 'green';
+      this.saveSettings();
+      this.applyBoardTheme();
+      this.speak('Zmieniono motyw szachownicy na szmaragdowy leśny.');
       return;
     }
     if (rawLower.includes('graj') || rawLower.includes('ruch silnika') || rawLower.includes('twój ruch')) {
