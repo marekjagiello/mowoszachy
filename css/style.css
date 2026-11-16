@@ -1072,3 +1072,207 @@ body {
   border-color: #60a5fa;
   color: #ffffff;
 }
+
+/* ==========================================================================
+   Fullscreen Chessboard Mode (Mobile-First Touch Ergonomics)
+   ========================================================================== */
+.accordion-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accordion-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-header-fs {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #93c5fd;
+  border-radius: 6px;
+  font-size: 1.05rem;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-header-fs:hover, .btn-header-fs:active {
+  background: var(--bg-accent);
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+.board-top-actions {
+  width: 100%;
+  max-width: 350px;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+.btn-board-fs {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: #60a5fa;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  transition: all 0.15s ease;
+}
+
+.btn-board-fs:hover, .btn-board-fs:active {
+  background: var(--bg-accent);
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+.btn-fs-icon {
+  font-size: 1.1rem;
+}
+
+/* Chessboard wrapper default */
+.chessboard-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.fs-top-bar, .fs-bottom-bar {
+  display: none;
+}
+
+/* Fullscreen Active Mode */
+.chessboard-wrapper.fullscreen-active {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background-color: #0b1329;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: max(env(safe-area-inset-top), 12px) 12px max(env(safe-area-inset-bottom), 16px) 12px;
+  box-sizing: border-box;
+}
+
+.chessboard-wrapper.fullscreen-active .fs-top-bar {
+  display: flex;
+  width: 100%;
+  max-width: 620px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  min-height: 52px;
+  box-sizing: border-box;
+}
+
+.fs-turn-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fs-turn-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.fs-status-badge {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #ef4444;
+}
+
+.btn-fs-close {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-fs-close:hover, .btn-fs-close:active {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.chessboard-wrapper.fullscreen-active .board-container {
+  width: min(94vw, calc(100vh - 170px));
+  max-width: 600px;
+  aspect-ratio: 1 / 1;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85);
+  margin: auto 0;
+}
+
+.chessboard-wrapper.fullscreen-active .fs-bottom-bar {
+  display: flex;
+  width: 100%;
+  max-width: 620px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 6px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+}
+
+.btn-fs-action {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 10px 4px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 52px;
+  transition: all 0.15s ease;
+}
+
+.btn-fs-action:hover, .btn-fs-action:active {
+  background: var(--primary);
+  border-color: var(--primary-hover);
+  color: #ffffff;
+}
+
+.btn-fs-action.listening {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #fca5a5;
+  animation: pulse-border 1.5s infinite;
+}

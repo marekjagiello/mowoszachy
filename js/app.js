@@ -62,6 +62,7 @@ class MowoSzachyApp {
     this.selectedSquare = null;
     this.lastMoveSquares = []; // [from, to]
     this.isBoardFlipped = false;
+    this.isFullscreenBoard = false;
     this.recognition = null;
     this.isListening = false;
     this.currentVoice = null;
@@ -286,8 +287,21 @@ class MowoSzachyApp {
 
       // Board & Aux
       chessboard: document.getElementById('chessboard'),
+      chessboardWrapper: document.getElementById('chessboardWrapper'),
       boardAccordion: document.getElementById('boardAccordion'),
       boardToggle: document.getElementById('boardToggle'),
+      btnFullscreenBoard: document.getElementById('btnFullscreenBoard'),
+      btnHeaderFullscreen: document.getElementById('btnHeaderFullscreen'),
+      btnAuxFullscreen: document.getElementById('btnAuxFullscreen'),
+      btnCloseFullscreen: document.getElementById('btnCloseFullscreen'),
+      fsTurnMarker: document.getElementById('fsTurnMarker'),
+      fsTurnLabel: document.getElementById('fsTurnLabel'),
+      fsStatusBadge: document.getElementById('fsStatusBadge'),
+      btnFsUndo: document.getElementById('btnFsUndo'),
+      btnFsVoice: document.getElementById('btnFsVoice'),
+      fsVoiceLabel: document.getElementById('fsVoiceLabel'),
+      btnFsEngine: document.getElementById('btnFsEngine'),
+      btnFsFlip: document.getElementById('btnFsFlip'),
       boardOpacitySlider: document.getElementById('boardOpacitySlider'),
       boardOpacityVal: document.getElementById('boardOpacityVal'),
       btnUndoMove: document.getElementById('btnUndoMove'),
@@ -495,6 +509,8 @@ class MowoSzachyApp {
       this.isListening = true;
       this.el.btnVoiceInput.classList.add('listening');
       this.el.voiceBtnLabel.textContent = 'Słucham...';
+      if (this.el.btnFsVoice) this.el.btnFsVoice.classList.add('listening');
+      if (this.el.fsVoiceLabel) this.el.fsVoiceLabel.textContent = 'Słucham...';
       this.setSpeechIndicator(true, 'Nasłuchuję ruchu...');
     };
 
@@ -519,6 +535,8 @@ class MowoSzachyApp {
       this.isListening = false;
       this.el.btnVoiceInput.classList.remove('listening');
       this.el.voiceBtnLabel.textContent = 'Powiedz ruch';
+      if (this.el.btnFsVoice) this.el.btnFsVoice.classList.remove('listening');
+      if (this.el.fsVoiceLabel) this.el.fsVoiceLabel.textContent = 'Głos';
       this.setSpeechIndicator(false, 'Gotowy');
     };
   }
@@ -1156,6 +1174,78 @@ class MowoSzachyApp {
     this.speak(this.isBoardFlipped ? 'Odwrócono szachownicę dla czarnych' : 'Odwrócono szachownicę dla białych');
   }
 
+  // --- Fullscreen Chessboard Mode ---
+  enterFullscreenBoard() {
+    this.isFullscreenBoard = true;
+    if (this.el.chessboardWrapper) {
+      this.el.chessboardWrapper.classList.add('fullscreen-active');
+    }
+    if (this.el.boardAccordion) {
+      this.el.boardAccordion.classList.add('expanded');
+    }
+    document.body.style.overflow = 'hidden';
+
+    try {
+      const el = this.el.chessboardWrapper || document.documentElement;
+      if (el.requestFullscreen && !document.fullscreenElement) {
+        el.requestFullscreen().catch(() => {});
+      }
+    } catch (e) {}
+
+    this.updateFullscreenUI();
+  }
+
+  exitFullscreenBoard(callNativeExit = true) {
+    this.isFullscreenBoard = false;
+    if (this.el.chessboardWrapper) {
+      this.el.chessboardWrapper.classList.remove('fullscreen-active');
+    }
+    document.body.style.overflow = '';
+
+    if (callNativeExit && document.fullscreenElement) {
+      try {
+        document.exitFullscreen().catch(() => {});
+      } catch (e) {}
+    }
+  }
+
+  toggleFullscreenBoard() {
+    if (this.isFullscreenBoard) {
+      this.exitFullscreenBoard();
+    } else {
+      this.enterFullscreenBoard();
+    }
+  }
+
+  updateFullscreenUI() {
+    if (!this.el.fsTurnMarker || !this.el.fsTurnLabel) return;
+    const isWhite = this.game.turn() === 'w';
+    this.el.fsTurnMarker.className = `piece-marker ${isWhite ? 'white' : 'black'}`;
+    this.el.fsTurnLabel.textContent = isWhite ? 'Ruch Białych' : 'Ruch Czarnych';
+
+    if (this.el.fsStatusBadge) {
+      if (this.game.in_checkmate()) {
+        this.el.fsStatusBadge.textContent = ' — MAT!';
+      } else if (this.game.in_check()) {
+        this.el.fsStatusBadge.textContent = ' — SZACH';
+      } else if (this.game.in_draw()) {
+        this.el.fsStatusBadge.textContent = ' — REMIS';
+      } else {
+        this.el.fsStatusBadge.textContent = '';
+      }
+    }
+
+    if (this.el.btnFsVoice && this.el.fsVoiceLabel) {
+      if (this.isListening) {
+        this.el.btnFsVoice.classList.add('listening');
+        this.el.fsVoiceLabel.textContent = 'Słucham...';
+      } else {
+        this.el.btnFsVoice.classList.remove('listening');
+        this.el.fsVoiceLabel.textContent = 'Głos';
+      }
+    }
+  }
+
   // --- Polish Position Describer ---
   formatMoveToPolish(move) {
     if (move.san === 'O-O') return 'krótka roszada';
@@ -1348,6 +1438,7 @@ class MowoSzachyApp {
     }
 
     this.renderBoardPieces();
+    this.updateFullscreenUI();
   }
 
   attachEventListeners() {
@@ -1371,10 +1462,54 @@ class MowoSzachyApp {
     this.el.btnUndoMove.addEventListener('click', () => this.undoMove());
     this.el.btnNewGame.addEventListener('click', () => this.showNewGameModal());
     this.el.btnFlipBoard.addEventListener('click', () => this.toggleBoardFlip());
+    if (this.el.btnAuxFullscreen) {
+      this.el.btnAuxFullscreen.addEventListener('click', () => this.enterFullscreenBoard());
+    }
     this.el.btnCopyFen.addEventListener('click', () => {
       navigator.clipboard.writeText(this.game.fen()).then(() => {
         this.speak('Skopiowano pozycję do schowka.');
       });
+    });
+
+    // Fullscreen Board Toggle Buttons
+    if (this.el.btnFullscreenBoard) {
+      this.el.btnFullscreenBoard.addEventListener('click', () => this.enterFullscreenBoard());
+    }
+    if (this.el.btnHeaderFullscreen) {
+      this.el.btnHeaderFullscreen.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.enterFullscreenBoard();
+      });
+    }
+    if (this.el.btnCloseFullscreen) {
+      this.el.btnCloseFullscreen.addEventListener('click', () => this.exitFullscreenBoard());
+    }
+
+    // Fullscreen Bottom Controls
+    if (this.el.btnFsUndo) {
+      this.el.btnFsUndo.addEventListener('click', () => this.undoMove());
+    }
+    if (this.el.btnFsVoice) {
+      this.el.btnFsVoice.addEventListener('click', () => this.toggleListening());
+    }
+    if (this.el.btnFsEngine) {
+      this.el.btnFsEngine.addEventListener('click', () => this.playEngineMove());
+    }
+    if (this.el.btnFsFlip) {
+      this.el.btnFsFlip.addEventListener('click', () => this.toggleBoardFlip());
+    }
+
+    // Keyboard & Native Fullscreen Change Handlers
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isFullscreenBoard) {
+        this.exitFullscreenBoard();
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && this.isFullscreenBoard) {
+        this.exitFullscreenBoard(false);
+      }
     });
 
     // Manual Input

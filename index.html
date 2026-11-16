@@ -115,11 +115,57 @@
     <!-- Collapsible Visual Board (Optional Check) -->
     <section class="accordion-section" id="boardAccordion">
       <div class="accordion-header" id="boardToggle">
-        <span>👁️ Podgląd szachownicy kontrolnej</span>
-        <span class="accordion-arrow">▼</span>
+        <div class="accordion-header-title">
+          <span>👁️ Podgląd szachownicy kontrolnej</span>
+        </div>
+        <div class="accordion-header-actions">
+          <button id="btnHeaderFullscreen" class="btn-header-fs" type="button" title="Powiększ na pełny ekran" aria-label="Pełny ekran szachownicy">⛶</button>
+          <span class="accordion-arrow">▼</span>
+        </div>
       </div>
       <div class="accordion-body">
-        <div id="chessboard" class="board-container"></div>
+        <div class="board-top-actions">
+          <button id="btnFullscreenBoard" class="btn-board-fs" type="button" title="Graj na pełnym ekranie dotykowo">
+            <span class="btn-fs-icon">⛶</span>
+            <span>Powiększ szachownicę (Pełny ekran)</span>
+          </button>
+        </div>
+
+        <div id="chessboardWrapper" class="chessboard-wrapper">
+          <!-- Fullscreen Top Bar (visible only in fullscreen) -->
+          <div class="fs-top-bar" id="fsTopBar">
+            <div class="fs-turn-status">
+              <span id="fsTurnMarker" class="piece-marker white"></span>
+              <span id="fsTurnLabel" class="fs-turn-text">Ruch Białych</span>
+              <span id="fsStatusBadge" class="fs-status-badge"></span>
+            </div>
+            <button id="btnCloseFullscreen" class="btn-fs-close" type="button" title="Zamknij pełny ekran" aria-label="Zamknij pełny ekran">✕</button>
+          </div>
+
+          <!-- Main Chessboard -->
+          <div id="chessboard" class="board-container"></div>
+
+          <!-- Fullscreen Bottom Control Bar (visible only in fullscreen) -->
+          <div class="fs-bottom-bar" id="fsBottomBar">
+            <button id="btnFsUndo" class="btn-fs-action" type="button" title="Cofnij ruch">
+              <span>⏪</span>
+              <span>Cofnij</span>
+            </button>
+            <button id="btnFsVoice" class="btn-fs-action" type="button" title="Powiedz ruch do mikrofonu">
+              <span>🎤</span>
+              <span id="fsVoiceLabel">Głos</span>
+            </button>
+            <button id="btnFsEngine" class="btn-fs-action" type="button" title="Ruch silnika">
+              <span>🤖</span>
+              <span>Silnik</span>
+            </button>
+            <button id="btnFsFlip" class="btn-fs-action" type="button" title="Odwróć szachownicę">
+              <span>🔃</span>
+              <span>Odwróć</span>
+            </button>
+          </div>
+        </div>
+
         <p style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">
           Kliknij pole początkowe i docelowe lub używaj głosu
         </p>
@@ -139,6 +185,10 @@
       <button id="btnFlipBoard" class="btn-aux" title="Odwróć widok szachownicy">
         <span>🔃</span>
         <span>Odwróć</span>
+      </button>
+      <button id="btnAuxFullscreen" class="btn-aux" title="Powiększ szachownicę na pełny ekran">
+        <span>⛶</span>
+        <span>Pełny ekran</span>
       </button>
       <button id="btnCopyFen" class="btn-aux" title="Kopiuj aktualny FEN">
         <span>📋</span>
