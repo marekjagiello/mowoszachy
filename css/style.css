@@ -511,7 +511,7 @@ body {
   background-image: url('../assets/board.jpg');
   background-size: cover;
   background-position: center;
-  opacity: var(--board-bg-opacity, 1);
+  opacity: var(--board-bg-opacity, 0.5);
   pointer-events: none;
   z-index: 0;
   transition: opacity 0.05s ease;

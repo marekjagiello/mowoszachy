@@ -48,7 +48,7 @@ const DEFAULT_SETTINGS = {
   descriptionStyle: 'detailed',
   autoSpeakEngine: true,
   voiceIndex: -1,
-  settingsVersion: 4
+  settingsVersion: 5
 };
 
 class MowoSzachyApp {
@@ -99,8 +99,8 @@ class MowoSzachyApp {
       const stored = localStorage.getItem('mowoszachy_settings');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.settingsVersion !== 4) {
-          if (parsed.boardBgOpacity === undefined) parsed.boardBgOpacity = 50;
+        if (parsed.settingsVersion !== 5) {
+          parsed.boardBgOpacity = 50;
           if (parsed.pieceGlowWhiteSize === undefined) parsed.pieceGlowWhiteSize = 5;
           if (parsed.pieceGlowWhiteOpacity === undefined) parsed.pieceGlowWhiteOpacity = 85;
           if (parsed.pieceGlowBlackSize === undefined) parsed.pieceGlowBlackSize = 5;
@@ -108,7 +108,7 @@ class MowoSzachyApp {
           if (!parsed.botName) parsed.botName = 'Janusz';
           if (parsed.engineElo === undefined) parsed.engineElo = 1500;
           if (parsed.engineDepth === undefined) parsed.engineDepth = 10;
-          parsed.settingsVersion = 4;
+          parsed.settingsVersion = 5;
         }
         return { ...DEFAULT_SETTINGS, ...parsed };
       }
