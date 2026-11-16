@@ -305,9 +305,11 @@ body {
   box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
 }
 
-.btn-action.listening {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  border-color: #ef4444;
+.btn-action.listening,
+.btn-action.primary.listening {
+  background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 4px 18px rgba(220, 38, 38, 0.55);
   animation: pulse-ring 1.5s infinite;
 }
 
