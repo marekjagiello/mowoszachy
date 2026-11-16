@@ -36,16 +36,17 @@ const DEFAULT_SETTINGS = {
   soundAlert: true,
   autoFlipBoard: true,
   boardTheme: 'wood',          // 'wood' | 'zelda'
-  boardBgOpacity: 100,         // 0 - 100 (temporary test)
-  pieceGlowWhiteSize: 5,       // 0 - 15 px (temporary test)
-  pieceGlowWhiteOpacity: 85,   // 0 - 100 % (temporary test)
-  pieceGlowBlackSize: 5,       // 0 - 15 px (temporary test)
-  pieceGlowBlackOpacity: 85,   // 0 - 100 % (temporary test)
+  boardBgOpacity: 50,          // 0 - 100 (50% domyślnie)
+  pieceGlowWhiteSize: 5,       // 0 - 15 px (optymalna)
+  pieceGlowWhiteOpacity: 85,   // 0 - 100 % (optymalna)
+  pieceGlowBlackSize: 5,       // 0 - 15 px (optymalna)
+  pieceGlowBlackOpacity: 85,   // 0 - 100 % (optymalna)
   engineDepth: 10,
   speechRate: 1.0,
   descriptionStyle: 'detailed',
   autoSpeakEngine: true,
-  voiceIndex: -1
+  voiceIndex: -1,
+  settingsVersion: 2
 };
 
 class MowoSzachyApp {
@@ -86,7 +87,16 @@ class MowoSzachyApp {
     try {
       const stored = localStorage.getItem('mowoszachy_settings');
       if (stored) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+        const parsed = JSON.parse(stored);
+        if (parsed.settingsVersion !== 2) {
+          parsed.boardBgOpacity = 50;
+          parsed.pieceGlowWhiteSize = 5;
+          parsed.pieceGlowWhiteOpacity = 85;
+          parsed.pieceGlowBlackSize = 5;
+          parsed.pieceGlowBlackOpacity = 85;
+          parsed.settingsVersion = 2;
+        }
+        return { ...DEFAULT_SETTINGS, ...parsed };
       }
     } catch (e) {
       remoteLog('WARN', 'Could not load settings: ' + e.message);
@@ -122,7 +132,7 @@ class MowoSzachyApp {
     this.applyBoardTheme();
 
     if (this.el.boardOpacitySlider) {
-      const opVal = this.settings.boardBgOpacity !== undefined ? this.settings.boardBgOpacity : 100;
+      const opVal = this.settings.boardBgOpacity !== undefined ? this.settings.boardBgOpacity : 50;
       this.el.boardOpacitySlider.value = opVal;
       if (this.el.boardOpacityVal) {
         this.el.boardOpacityVal.textContent = `${opVal}%`;
@@ -191,7 +201,7 @@ class MowoSzachyApp {
     const theme = this.settings.boardTheme || 'wood';
     this.el.chessboard.classList.remove('theme-wood', 'theme-zelda', 'theme-blue', 'theme-green');
     this.el.chessboard.classList.add(`theme-${theme}`);
-    const opVal = this.settings.boardBgOpacity !== undefined ? this.settings.boardBgOpacity : 100;
+    const opVal = this.settings.boardBgOpacity !== undefined ? this.settings.boardBgOpacity : 50;
     this.applyBoardBgOpacity(opVal);
   }
 
@@ -313,7 +323,6 @@ class MowoSzachyApp {
       pieceGlowBlackOpacity: document.getElementById('pieceGlowBlackOpacity'),
       pieceGlowBlackOpacityVal: document.getElementById('pieceGlowBlackOpacityVal'),
       glowSettingsHeader: document.getElementById('glowSettingsHeader'),
-      btnQuickOpenGlowSettings: document.getElementById('btnQuickOpenGlowSettings'),
 
       // New Game Modal
       newGameModal: document.getElementById('newGameModal'),
@@ -1435,18 +1444,6 @@ class MowoSzachyApp {
         this.settings.boardTheme = e.target.value;
         this.saveSettings();
         this.applyBoardTheme();
-      });
-    }
-
-    // Quick button from chessboard accordion to glow settings
-    if (this.el.btnQuickOpenGlowSettings) {
-      this.el.btnQuickOpenGlowSettings.addEventListener('click', () => {
-        this.el.settingsModal.classList.add('open');
-        if (this.el.glowSettingsHeader) {
-          setTimeout(() => {
-            this.el.glowSettingsHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 150);
-        }
       });
     }
 
