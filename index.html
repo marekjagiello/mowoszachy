@@ -33,6 +33,18 @@
 
   <!-- Main Content -->
   <main class="main-content">
+    <!-- Game Mode & Opponent Bar -->
+    <section class="mode-bar" id="modeBar">
+      <div class="mode-pill" id="modePill" title="Aktualny tryb gry">
+        <span class="mode-icon">⚔️</span>
+        <span id="modeLabelText">Gracz (Białe) vs Silnik</span>
+      </div>
+      <button id="btnSideToggle" class="btn-side-chip" title="Przełącz stronę gracza">
+        <span id="sideIcon">⚪</span>
+        <span id="sideLabel">Gram Białymi</span>
+      </button>
+    </section>
+
     <!-- Turn & State Banner -->
     <section class="turn-banner" id="turnBanner">
       <div class="turn-indicator">
@@ -115,15 +127,19 @@
 
     <!-- Bottom Auxiliary Bar -->
     <div class="aux-bar">
-      <button id="btnUndoMove" class="btn-aux">
+      <button id="btnUndoMove" class="btn-aux" title="Cofnij ruch">
         <span>⏪</span>
         <span>Cofnij</span>
       </button>
-      <button id="btnNewGame" class="btn-aux">
+      <button id="btnNewGame" class="btn-aux" title="Rozpocznij nową partię">
         <span>🔄</span>
         <span>Nowa partia</span>
       </button>
-      <button id="btnCopyFen" class="btn-aux">
+      <button id="btnFlipBoard" class="btn-aux" title="Odwróć widok szachownicy">
+        <span>🔃</span>
+        <span>Odwróć</span>
+      </button>
+      <button id="btnCopyFen" class="btn-aux" title="Kopiuj aktualny FEN">
         <span>📋</span>
         <span>Kopiuj FEN</span>
       </button>
@@ -137,6 +153,70 @@
         <h3>Ustawienia MowoSzachów</h3>
         <button id="btnCloseSettings" class="btn-icon">✕</button>
       </div>
+
+      <!-- Tryb gry i przeciwnik -->
+      <div class="settings-section-title">Tryb gry i przeciwnik</div>
+
+      <div class="setting-group">
+        <label for="gameModeSelect">Tryb rozgrywki:</label>
+        <div class="setting-control">
+          <select id="gameModeSelect">
+            <option value="vs-engine">Gracz vs Silnik (Automatyczna gra — domyślny)</option>
+            <option value="analysis">Dwóch graczy / Analiza pozycji</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label for="playerColorSelect">Twój kolor:</label>
+        <div class="setting-control">
+          <select id="playerColorSelect">
+            <option value="w">Białe (gracz rozpoczyna partię)</option>
+            <option value="b">Czarne (silnik rozpoczyna partię)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="autoEngineResponse" checked>
+          <span>Automatyczna odpowiedź silnika (bez klikania po ruchu)</span>
+        </label>
+      </div>
+
+      <div class="setting-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="autoListenAfterEngine">
+          <span>Auto-nasłuch: włącz mikrofon po ruchu silnika</span>
+        </label>
+      </div>
+
+      <div class="setting-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="soundAlert" checked>
+          <span>Sygnał dźwiękowy (gong) po ruchu silnika</span>
+        </label>
+      </div>
+
+      <div class="setting-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="autoFlipBoard" checked>
+          <span>Obracaj podgląd szachownicy dla czarnych</span>
+        </label>
+      </div>
+
+      <!-- Silnik Stockfish -->
+      <div class="settings-section-title">Silnik szachowy Stockfish</div>
+
+      <div class="setting-group">
+        <label for="engineDepth">Siła silnika (Głębokość analizy: <span id="engineDepthVal">10</span>):</label>
+        <div class="setting-control">
+          <input type="range" id="engineDepth" min="2" max="18" step="1" value="10">
+        </div>
+      </div>
+
+      <!-- Mowa i Lektor -->
+      <div class="settings-section-title">Lektor i Mowa</div>
 
       <div class="setting-group">
         <label for="voiceSelect">Głos lektora (Polski TTS):</label>
@@ -153,27 +233,45 @@
       </div>
 
       <div class="setting-group">
-        <label for="engineDepth">Poziom trudności silnika (Głębokość <span id="engineDepthVal">10</span>):</label>
-        <div class="setting-control">
-          <input type="range" id="engineDepth" min="2" max="18" step="1" value="10">
-        </div>
-      </div>
-
-      <div class="setting-group">
         <label for="descriptionStyle">Styl opisu pozycji:</label>
         <div class="setting-control">
           <select id="descriptionStyle">
-            <option value="detailed">Szczegółowy (po polsku: np. "Białe: Król na g1...")</option>
-            <option value="brief">Zwięzły (figury i pola: np. "Kg1, Wf1, e4")</option>
+            <option value="detailed">Szczegółowy (np. "Białe: Król na g1...")</option>
+            <option value="brief">Zwięzły (np. "Kg1, Wf1, e4")</option>
           </select>
         </div>
       </div>
 
       <div class="setting-group">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <label class="checkbox-label">
           <input type="checkbox" id="autoSpeakEngineMove" checked>
-          <span>Automatycznie czytaj ruchy silnika</span>
+          <span>Automatycznie czytaj ruchy silnika na głos</span>
         </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Game Modal -->
+  <div class="modal-overlay" id="newGameModal">
+    <div class="modal-sheet modal-dialog">
+      <div class="modal-header">
+        <h3>Nowa partia szachów</h3>
+        <button id="btnCloseNewGame" class="btn-icon">✕</button>
+      </div>
+      <p class="dialog-desc">
+        Wybierz stronę dla nowej partii przeciwko silnikowi Stockfish:
+      </p>
+      <div class="color-select-grid">
+        <button id="btnChooseWhite" class="btn-choice-color white">
+          <span class="choice-piece">♔</span>
+          <span class="choice-title">Graj Białymi</span>
+          <span class="choice-sub">Rozpoczynasz partię ruchem</span>
+        </button>
+        <button id="btnChooseBlack" class="btn-choice-color black">
+          <span class="choice-piece">♚</span>
+          <span class="choice-title">Graj Czarnymi</span>
+          <span class="choice-sub">Silnik wykona pierwszy ruch</span>
+        </button>
       </div>
     </div>
   </div>

@@ -15,7 +15,7 @@ window.addEventListener('error', (e) => {
 
 // Polish piece names mapping
 const PIECE_NAMES_PL = {
-  p: 'pion',
+  p: 'pionek',
   n: 'skoczek',
   b: 'goniec',
   r: 'wieża',
@@ -28,22 +28,43 @@ const PIECE_SYMBOLS = {
   P: '♙', N: '♘', B: '♗', R: '♖', Q: '♕', K: '♔'
 };
 
+const DEFAULT_SETTINGS = {
+  gameMode: 'vs-engine',       // 'vs-engine' | 'analysis'
+  playerColor: 'w',            // 'w' | 'b'
+  autoEngineResponse: true,
+  autoListenAfterEngine: false,
+  soundAlert: true,
+  autoFlipBoard: true,
+  engineDepth: 10,
+  speechRate: 1.0,
+  descriptionStyle: 'detailed',
+  autoSpeakEngine: true,
+  voiceIndex: -1
+};
+
 class MowoSzachyApp {
   constructor() {
     this.game = new Chess();
     this.stockfish = null;
     this.stockfishReady = false;
     this.isEngineThinking = false;
+    this.pendingEngineAction = null;
+    this.engineTimer = null;
+
+    // Board & Game State
     this.selectedSquare = null;
+    this.lastMoveSquares = []; // [from, to]
+    this.isBoardFlipped = false;
     this.recognition = null;
     this.isListening = false;
     this.currentVoice = null;
-    this.speechRate = 1.0;
-    this.engineDepth = 10;
-    this.descriptionStyle = 'detailed';
-    this.autoSpeakEngine = true;
+
+    // Load user settings or defaults
+    this.settings = this.loadSettings();
 
     this.initElements();
+    this.syncSettingsToUI();
+    this.initAudioContext();
     this.initSpeechSynthesis();
     this.initSpeechRecognition();
     this.initStockfish();
@@ -51,47 +72,182 @@ class MowoSzachyApp {
     this.attachEventListeners();
     this.updateUI();
 
-    remoteLog('INFO', 'MowoSzachy initialized successfully');
+    remoteLog('INFO', `MowoSzachy initialized. Mode: ${this.settings.gameMode}, Color: ${this.settings.playerColor}`);
+  }
+
+  // --- Settings Persistence ---
+  loadSettings() {
+    try {
+      const stored = localStorage.getItem('mowoszachy_settings');
+      if (stored) {
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      remoteLog('WARN', 'Could not load settings: ' + e.message);
+    }
+    return { ...DEFAULT_SETTINGS };
+  }
+
+  saveSettings() {
+    try {
+      localStorage.setItem('mowoszachy_settings', JSON.stringify(this.settings));
+    } catch (e) {
+      remoteLog('WARN', 'Could not save settings: ' + e.message);
+    }
+  }
+
+  syncSettingsToUI() {
+    this.el.gameModeSelect.value = this.settings.gameMode;
+    this.el.playerColorSelect.value = this.settings.playerColor;
+    this.el.autoEngineResponse.checked = this.settings.autoEngineResponse;
+    this.el.autoListenAfterEngine.checked = this.settings.autoListenAfterEngine;
+    this.el.soundAlert.checked = this.settings.soundAlert;
+    this.el.autoFlipBoard.checked = this.settings.autoFlipBoard;
+    this.el.engineDepth.value = this.settings.engineDepth;
+    this.el.engineDepthVal.textContent = this.settings.engineDepth;
+    this.el.speechRate.value = this.settings.speechRate;
+    this.el.speechRateVal.textContent = parseFloat(this.settings.speechRate).toFixed(2);
+    this.el.descriptionStyle.value = this.settings.descriptionStyle;
+    this.el.autoSpeakEngineMove.checked = this.settings.autoSpeakEngine;
+
+    this.isBoardFlipped = this.settings.autoFlipBoard && (this.settings.playerColor === 'b');
+    this.updateModeLabels();
+  }
+
+  updateModeLabels() {
+    if (this.settings.gameMode === 'vs-engine') {
+      const sideName = this.settings.playerColor === 'w' ? 'Białe' : 'Czarne';
+      const engineSide = this.settings.playerColor === 'w' ? 'Czarne' : 'Białe';
+      this.el.modeLabelText.textContent = `Gracz (${sideName}) vs Silnik (${engineSide})`;
+      this.el.sideLabel.textContent = `Gram: ${sideName}`;
+      this.el.sideIcon.textContent = this.settings.playerColor === 'w' ? '⚪' : '⚫';
+    } else {
+      this.el.modeLabelText.textContent = 'Tryb: Dwóch graczy / Analiza';
+      this.el.sideLabel.textContent = 'Analiza';
+      this.el.sideIcon.textContent = '🔍';
+    }
   }
 
   initElements() {
     this.el = {
+      // Header & Status
       engineStatus: document.getElementById('engineStatus'),
       speechStatus: document.getElementById('speechStatus'),
+      btnOpenSettings: document.getElementById('btnOpenSettings'),
+
+      // Mode & Matchup Bar
+      modeBar: document.getElementById('modeBar'),
+      modePill: document.getElementById('modePill'),
+      modeLabelText: document.getElementById('modeLabelText'),
+      btnSideToggle: document.getElementById('btnSideToggle'),
+      sideIcon: document.getElementById('sideIcon'),
+      sideLabel: document.getElementById('sideLabel'),
+
+      // Turn Banner
       turnMarker: document.getElementById('turnMarker'),
       turnLabel: document.getElementById('turnLabel'),
       moveCount: document.getElementById('moveCount'),
       gameStatusText: document.getElementById('gameStatusText'),
+
+      // Speech Card
       speechStateLabel: document.getElementById('speechStateLabel'),
       speechWaves: document.getElementById('speechWaves'),
       speechDisplayText: document.getElementById('speechDisplayText'),
       lastMoveText: document.getElementById('lastMoveText'),
       engineEvalText: document.getElementById('engineEvalText'),
-      chessboard: document.getElementById('chessboard'),
-      boardAccordion: document.getElementById('boardAccordion'),
-      boardToggle: document.getElementById('boardToggle'),
-      manualMoveInput: document.getElementById('manualMoveInput'),
-      btnSendManualMove: document.getElementById('btnSendManualMove'),
+
+      // Action Buttons
       btnReadPosition: document.getElementById('btnReadPosition'),
       btnVoiceInput: document.getElementById('btnVoiceInput'),
       voiceBtnLabel: document.getElementById('voiceBtnLabel'),
       btnPlayEngineMove: document.getElementById('btnPlayEngineMove'),
       btnReadHint: document.getElementById('btnReadHint'),
       btnReadLastMove: document.getElementById('btnReadLastMove'),
+
+      // Manual Input
+      manualMoveInput: document.getElementById('manualMoveInput'),
+      btnSendManualMove: document.getElementById('btnSendManualMove'),
+
+      // Board & Aux
+      chessboard: document.getElementById('chessboard'),
+      boardAccordion: document.getElementById('boardAccordion'),
+      boardToggle: document.getElementById('boardToggle'),
       btnUndoMove: document.getElementById('btnUndoMove'),
       btnNewGame: document.getElementById('btnNewGame'),
+      btnFlipBoard: document.getElementById('btnFlipBoard'),
       btnCopyFen: document.getElementById('btnCopyFen'),
+
+      // Settings Modal
       settingsModal: document.getElementById('settingsModal'),
-      btnOpenSettings: document.getElementById('btnOpenSettings'),
       btnCloseSettings: document.getElementById('btnCloseSettings'),
+      gameModeSelect: document.getElementById('gameModeSelect'),
+      playerColorSelect: document.getElementById('playerColorSelect'),
+      autoEngineResponse: document.getElementById('autoEngineResponse'),
+      autoListenAfterEngine: document.getElementById('autoListenAfterEngine'),
+      soundAlert: document.getElementById('soundAlert'),
+      autoFlipBoard: document.getElementById('autoFlipBoard'),
+      engineDepth: document.getElementById('engineDepth'),
+      engineDepthVal: document.getElementById('engineDepthVal'),
       voiceSelect: document.getElementById('voiceSelect'),
       speechRate: document.getElementById('speechRate'),
       speechRateVal: document.getElementById('speechRateVal'),
-      engineDepth: document.getElementById('engineDepth'),
-      engineDepthVal: document.getElementById('engineDepthVal'),
       descriptionStyle: document.getElementById('descriptionStyle'),
       autoSpeakEngineMove: document.getElementById('autoSpeakEngineMove'),
+
+      // New Game Modal
+      newGameModal: document.getElementById('newGameModal'),
+      btnCloseNewGame: document.getElementById('btnCloseNewGame'),
+      btnChooseWhite: document.getElementById('btnChooseWhite'),
+      btnChooseBlack: document.getElementById('btnChooseBlack'),
     };
+  }
+
+  // --- Web Audio Chime (Offline, Zero Assets) ---
+  initAudioContext() {
+    this.audioCtx = null;
+    const unlock = () => {
+      if (!this.audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          this.audioCtx = new AudioContext();
+        }
+      }
+      if (this.audioCtx && this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume();
+      }
+    };
+    window.addEventListener('click', unlock, { once: true });
+    window.addEventListener('touchstart', unlock, { once: true });
+  }
+
+  playChime() {
+    if (!this.settings.soundAlert) return;
+    try {
+      if (!this.audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) this.audioCtx = new AudioContext();
+      }
+      if (!this.audioCtx) return;
+
+      const now = this.audioCtx.currentTime;
+      const osc = this.audioCtx.createOscillator();
+      const gain = this.audioCtx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      osc.connect(gain);
+      gain.connect(this.audioCtx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } catch (e) {
+      // Audio might fail before gesture, ignore safely
+    }
   }
 
   // --- Speech Synthesis (TTS) ---
@@ -104,6 +260,8 @@ class MowoSzachyApp {
 
     const loadVoices = () => {
       const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return;
+
       this.el.voiceSelect.innerHTML = '';
       const plVoices = voices.filter(v => v.lang.startsWith('pl') || v.lang.includes('PL'));
       const activeList = plVoices.length > 0 ? plVoices : voices;
@@ -115,7 +273,13 @@ class MowoSzachyApp {
         this.el.voiceSelect.appendChild(option);
       });
 
-      this.currentVoice = plVoices.length > 0 ? plVoices[0] : (voices[0] || null);
+      if (this.settings.voiceIndex >= 0 && activeList[this.settings.voiceIndex]) {
+        this.currentVoice = activeList[this.settings.voiceIndex];
+        this.el.voiceSelect.value = this.settings.voiceIndex;
+      } else {
+        this.currentVoice = plVoices.length > 0 ? plVoices[0] : (voices[0] || null);
+      }
+
       if (this.currentVoice) {
         this.el.speechStatus.querySelector('.status-dot').className = 'status-dot';
       }
@@ -130,13 +294,16 @@ class MowoSzachyApp {
       const voices = window.speechSynthesis.getVoices();
       const plVoices = voices.filter(v => v.lang.startsWith('pl') || v.lang.includes('PL'));
       const activeList = plVoices.length > 0 ? plVoices : voices;
-      this.currentVoice = activeList[e.target.value] || null;
+      this.settings.voiceIndex = parseInt(e.target.value, 10);
+      this.currentVoice = activeList[this.settings.voiceIndex] || null;
+      this.saveSettings();
     });
   }
 
-  speak(text, priority = false) {
+  speak(text, priority = false, onEnd = null) {
     if (!('speechSynthesis' in window)) {
       this.setDisplayText(text);
+      if (onEnd) onEnd();
       return;
     }
 
@@ -150,16 +317,18 @@ class MowoSzachyApp {
     const utterance = new SpeechSynthesisUtterance(text);
     if (this.currentVoice) utterance.voice = this.currentVoice;
     utterance.lang = this.currentVoice ? this.currentVoice.lang : 'pl-PL';
-    utterance.rate = this.speechRate;
+    utterance.rate = this.settings.speechRate;
     utterance.pitch = 1.0;
 
     utterance.onend = () => {
       this.setSpeechIndicator(false, 'Gotowy');
+      if (onEnd) onEnd();
     };
 
     utterance.onerror = (err) => {
       remoteLog('WARN', 'Speech error: ' + (err.error || 'unknown'));
-      this.setSpeechIndicator(false, 'Błąd mowy');
+      this.setSpeechIndicator(false, 'Gotowy');
+      if (onEnd) onEnd();
     };
 
     window.speechSynthesis.speak(utterance);
@@ -200,14 +369,16 @@ class MowoSzachyApp {
     };
 
     this.recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.trim().toLowerCase();
+      const transcript = event.results[0][0].transcript.trim();
       remoteLog('INFO', 'Speech recognized: ' + transcript);
       this.handleVoiceCommand(transcript);
     };
 
     this.recognition.onerror = (event) => {
       remoteLog('WARN', 'Speech recognition error: ' + event.error);
-      this.speak('Nie dosłyszałem ruchu. Spróbuj ponownie.');
+      if (event.error !== 'no-speech') {
+        this.speak('Nie dosłyszałem ruchu. Spróbuj ponownie.');
+      }
     };
 
     this.recognition.onend = () => {
@@ -221,9 +392,12 @@ class MowoSzachyApp {
   toggleListening() {
     if (!this.recognition) return;
     if (this.isListening) {
-      this.recognition.stop();
+      try { this.recognition.stop(); } catch (e) {}
     } else {
       try {
+        if (window.speechSynthesis && window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+        }
         this.recognition.start();
       } catch (e) {
         remoteLog('WARN', 'Could not start recognition: ' + e.message);
@@ -231,77 +405,198 @@ class MowoSzachyApp {
     }
   }
 
-  // Convert natural Polish phrases to chess moves
-  handleVoiceCommand(raw) {
-    let clean = raw
-      .replace(/kropka|przecinek/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+  // --- Polish Chess Voice & Text Parser ---
+  normalizePolishSpeech(raw) {
+    let text = raw.toLowerCase().trim();
 
-    // Commands
-    if (clean.includes('przeczytaj pozycję') || clean.includes('jaka pozycja') || clean.includes('czytaj pozycję')) {
-      this.readFullPosition();
+    // Remove punctuation
+    text = text.replace(/[.,!?:;\-\–]/g, ' ');
+
+    // Misheard Polish phonetics in Google Speech STT
+    // "503", "5 3", "f 3" -> "f3"
+    text = text.replace(/\b503\b/g, 'f3');
+    text = text.replace(/\b50\b/g, 'f');
+
+    // Letter phonetic names
+    text = text.replace(/\bef\b/g, 'f');
+    text = text.replace(/\bce\b|\bse\b/g, 'c');
+    text = text.replace(/\bde\b/g, 'd');
+    text = text.replace(/\bbe\b/g, 'b');
+    text = text.replace(/\bgie\b|\bge\b/g, 'g');
+    text = text.replace(/\bha\b/g, 'h');
+
+    // Numbers in words
+    const numMap = {
+      jeden: '1', jedynka: '1',
+      dwa: '2', dwójka: '2', dwie: '2',
+      trzy: '3', trójka: '3',
+      cztery: '4', czwórka: '4',
+      pięć: '5', piec: '5', piątka: '5',
+      sześć: '6', szesc: '6', szóstka: '6',
+      siedem: '7', siódemka: '7',
+      osiem: '8', ósemka: '8'
+    };
+    for (const [word, num] of Object.entries(numMap)) {
+      const reg = new RegExp(`\\b${word}\\b`, 'g');
+      text = text.replace(reg, num);
+    }
+
+    // Castling phrases
+    text = text.replace(/\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b/g, 'O-O');
+    text = text.replace(/\b(długa roszada|duża roszada|roszada długa|roszada duża|zero zero zero)\b/g, 'O-O-O');
+    text = text.replace(/\broszada\b/g, 'O-O');
+
+    // Piece names
+    text = text.replace(/\b(skoczek|skoczka|skoczkiem|koń|konia|koniem)\b/g, 'N');
+    text = text.replace(/\b(goniec|gońca|gońcem|laufer|laufra)\b/g, 'B');
+    text = text.replace(/\b(wieża|wieżę|wieżą|wieze)\b/g, 'R');
+    text = text.replace(/\b(hetman|hetmana|hetmanem|królowa|królową|dama|damę|damą)\b/g, 'Q');
+    text = text.replace(/\b(król|króla|królem)\b/g, 'K');
+    text = text.replace(/\b(pion|pionek|piona|pionka|pionem|pionkiem)\b/g, 'P');
+
+    // Action & filler words
+    text = text.replace(/\b(na|do|w|z|pole|pola)\b/g, ' ');
+    text = text.replace(/\b(bije|zbija|bierze|bicia)\b/g, 'x');
+
+    // Collapse separated letter + digit (e.g. "e 4" -> "e4", "f 3" -> "f3", "c 4" -> "c4")
+    text = text.replace(/\b([a-h])\s+([1-8])\b/g, '$1$2');
+
+    // Normalize multiple spaces
+    text = text.replace(/\s+/g, ' ').trim();
+    return text;
+  }
+
+  handleVoiceCommand(raw) {
+    const rawLower = raw.toLowerCase().trim();
+
+    // 1. Spoken Application Commands
+    if (rawLower.includes('nowa partia') || rawLower.includes('zacznij od nowa') || rawLower.includes('zresetuj')) {
+      this.showNewGameModal();
       return;
     }
-    if (clean.includes('cofnij') || clean.includes('cofnij ruch')) {
+    if (rawLower.includes('graj białymi') || rawLower.includes('zagraj białymi')) {
+      this.startNewGame('w');
+      return;
+    }
+    if (rawLower.includes('graj czarnymi') || rawLower.includes('zagraj czarnymi')) {
+      this.startNewGame('b');
+      return;
+    }
+    if (rawLower.includes('poddaję') || rawLower.includes('rezygnuję') || rawLower.includes('poddanie')) {
+      this.resignGame();
+      return;
+    }
+    if (rawLower.includes('cofnij') || rawLower.includes('cofnij ruch') || rawLower.includes('wróć')) {
       this.undoMove();
       return;
     }
-    if (clean.includes('podpowiedz') || clean.includes('jaki ruch') || clean.includes('podpowiedź')) {
+    if (rawLower.includes('podpowiedz') || rawLower.includes('jaki ruch') || rawLower.includes('podpowiedź') || rawLower.includes('pomóż')) {
       this.requestEngineHint();
       return;
     }
-    if (clean.includes('graj') || clean.includes('ruch silnika') || clean.includes('twój ruch')) {
+    if (rawLower.includes('przeczytaj pozycję') || rawLower.includes('jaka pozycja') || rawLower.includes('czytaj pozycję') || rawLower.includes('stan gry')) {
+      this.readFullPosition();
+      return;
+    }
+    if (rawLower.includes('powtórz') || rawLower.includes('ostatni ruch') || rawLower.includes('jaki był ruch') || rawLower.includes('co zagrałeś')) {
+      this.repeatLastMove();
+      return;
+    }
+    if (rawLower.includes('odwróć') && (rawLower.includes('szachownicę') || rawLower.includes('deskę'))) {
+      this.toggleBoardFlip();
+      return;
+    }
+    if (rawLower.includes('graj') || rawLower.includes('ruch silnika') || rawLower.includes('twój ruch')) {
       this.playEngineMove();
       return;
     }
 
-    // Move phrases parsing
-    // Replace Polish words with standard algebraic notation
-    let phrase = clean
-      .replace(/\bkrótka roszada\b|\broszada krótka\b|\bzero zero\b/g, 'O-O')
-      .replace(/\bdługa roszada\b|\broszada długa\b/g, 'O-O-O')
-      .replace(/\bskoczek\b|\bkoń\b/g, 'N')
-      .replace(/\bgoniec\b|\blaufer\b/g, 'B')
-      .replace(/\bwieża\b/g, 'R')
-      .replace(/\bhetman\b|\bkrólowa\b|\bdama\b/g, 'Q')
-      .replace(/\bkról\b/g, 'K')
-      .replace(/\bpion\b|\bpionek\b/g, '')
-      .replace(/\bna\b|\bdo\b|\bz\b|\bbije\b/g, ' ')
-      .replace(/\ba jeden\b/g, 'a1').replace(/\ba dwa\b/g, 'a2').replace(/\ba trzy\b/g, 'a3').replace(/\ba cztery\b/g, 'a4')
-      .replace(/\bb jeden\b/g, 'b1').replace(/\bb dwa\b/g, 'b2').replace(/\bb trzy\b/g, 'b3').replace(/\bb cztery\b/g, 'b4')
-      .replace(/\bc jeden\b/g, 'c1').replace(/\bc dwa\b/g, 'c2').replace(/\bc trzy\b/g, 'c3').replace(/\bc cztery\b/g, 'c4')
-      .replace(/\bd jeden\b/g, 'd1').replace(/\bd dwa\b/g, 'd2').replace(/\bd trzy\b/g, 'd3').replace(/\bd cztery\b/g, 'd4')
-      .replace(/\be jeden\b/g, 'e1').replace(/\be dwa\b/g, 'e2').replace(/\be trzy\b/g, 'e3').replace(/\be cztery\b/g, 'e4')
-      .replace(/\bf jeden\b/g, 'f1').replace(/\bf dwa\b/g, 'f2').replace(/\bf trzy\b/g, 'f3').replace(/\bf cztery\b/g, 'f4')
-      .replace(/\bg jeden\b/g, 'g1').replace(/\bg dwa\b/g, 'g2').replace(/\bg trzy\b/g, 'g3').replace(/\bg cztery\b/g, 'g4')
-      .replace(/\bh jeden\b/g, 'h1').replace(/\bh dwa\b/g, 'h2').replace(/\bh trzy\b/g, 'h3').replace(/\bh cztery\b/g, 'h4')
-      .replace(/\s+/g, '')
-      .toLowerCase();
+    // 2. Parse as a chess move
+    const clean = this.normalizePolishSpeech(raw);
+    remoteLog('INFO', `Speech parsed: "${raw}" -> "${clean}"`);
 
-    // Check against legal moves
     const legalMoves = this.game.moves({ verbose: true });
-    let matchedMove = null;
-
-    // Direct match (e.g. "e4", "nf3")
-    matchedMove = legalMoves.find(m => 
-      m.san.toLowerCase().replace(/[^a-z0-9]/g, '') === phrase ||
-      `${m.from}${m.to}`.toLowerCase() === phrase
-    );
-
-    // Partial match (e.g. piece + target square)
-    if (!matchedMove) {
-      matchedMove = legalMoves.find(m => {
-        const fullPl = `${m.piece}${m.to}`.toLowerCase();
-        return fullPl === phrase || m.to === phrase;
-      });
+    if (legalMoves.length === 0) {
+      this.speak('Partia jest już zakończona.');
+      return;
     }
+
+    let matchedMove = this.findMatchingMove(clean, legalMoves);
 
     if (matchedMove) {
-      this.makeMove(matchedMove);
+      this.makeMove(matchedMove, false);
     } else {
-      this.speak(`Rozpoznano: "${raw}", ale to nie jest poprawny ruch w tej pozycji.`);
+      this.speak(`Rozpoznano: "${raw}". To nie jest poprawny ruch w tej pozycji. Spróbuj jeszcze raz.`);
     }
+  }
+
+  findMatchingMove(clean, legalMoves) {
+    const cleanNoSpace = clean.replace(/\s+/g, '');
+    const cleanUpper = clean.toUpperCase();
+
+    // 1. Direct SAN match (e.g. "e4", "Nf3", "O-O", "O-O-O", "Bxf7+", "ed5")
+    let match = legalMoves.find(m => {
+      const sanClean = m.san.replace(/[+#=x\-]/g, '').toLowerCase();
+      const inputClean = cleanNoSpace.replace(/[+#=x\-]/g, '').toLowerCase();
+      return sanClean === inputClean || m.san.toLowerCase() === cleanNoSpace.toLowerCase();
+    });
+    if (match) return match;
+
+    // 2. From-To match (e.g. "e2 e4", "e2e4", "g1f3")
+    match = legalMoves.find(m => {
+      const fromTo = `${m.from}${m.to}`.toLowerCase();
+      return cleanNoSpace.toLowerCase().includes(fromTo);
+    });
+    if (match) return match;
+
+    // 3. Piece + target square match (e.g. "N f3", "B c4", "R d1", "P e4")
+    const words = clean.split(' ');
+    const targetSquare = words.find(w => /^[a-h][1-8]$/.test(w));
+    const pieceSpecified = words.find(w => ['N', 'B', 'R', 'Q', 'K', 'P'].includes(w));
+
+    if (targetSquare) {
+      const candidates = legalMoves.filter(m => m.to === targetSquare);
+
+      if (pieceSpecified) {
+        const pieceType = pieceSpecified.toLowerCase();
+        const pieceCandidates = candidates.filter(m => m.piece === (pieceType === 'p' ? 'p' : pieceType));
+
+        if (pieceCandidates.length === 1) {
+          return pieceCandidates[0];
+        } else if (pieceCandidates.length > 1) {
+          // Disambiguate by origin file or rank if mentioned (e.g. "Rad1" -> from 'a')
+          const disambig = pieceCandidates.find(m => clean.includes(m.from[0]) || clean.includes(m.from[1]));
+          if (disambig) return disambig;
+          return pieceCandidates[0];
+        }
+      } else {
+        // No piece specified: if only 1 move reaches this square or pawn reaches it
+        if (candidates.length === 1) return candidates[0];
+        const pawnMove = candidates.find(m => m.piece === 'p');
+        if (pawnMove) return pawnMove;
+      }
+    }
+
+    // 4. Pawn captures (e.g. "exd5", "e x d5", "ed5", "e d5")
+    const pawnCap = clean.match(/([a-h])\s*(?:x|\s)?\s*([a-h][1-8])/);
+    if (pawnCap) {
+      const fromFile = pawnCap[1];
+      const toSq = pawnCap[2];
+      const capMove = legalMoves.find(m => m.piece === 'p' && m.from[0] === fromFile && m.to === toSq);
+      if (capMove) return capMove;
+    }
+
+    // 5. Castling fallback
+    if (cleanUpper.includes('O-O-O')) {
+      const castleLong = legalMoves.find(m => m.san === 'O-O-O');
+      if (castleLong) return castleLong;
+    }
+    if (cleanUpper.includes('O-O')) {
+      const castleShort = legalMoves.find(m => m.san === 'O-O');
+      if (castleShort) return castleShort;
+    }
+
+    return null;
   }
 
   // --- Stockfish Engine Integration ---
@@ -327,6 +622,11 @@ class MowoSzachyApp {
       this.stockfishReady = true;
       this.el.engineStatus.querySelector('.status-dot').className = 'status-dot';
       this.el.engineStatus.querySelector('.status-text').textContent = 'Stockfish';
+
+      // If user started as Black and it's move 1, make engine start!
+      if (this.settings.gameMode === 'vs-engine' && this.settings.playerColor === 'b' && this.game.history().length === 0) {
+        setTimeout(() => this.playEngineMove(), 600);
+      }
     }
 
     // Evaluation parsing
@@ -345,6 +645,8 @@ class MowoSzachyApp {
     // Best move received
     if (line.startsWith('bestmove')) {
       this.isEngineThinking = false;
+      this.setSpeechIndicator(false, 'Gotowy');
+
       const parts = line.split(' ');
       const moveStr = parts[1];
 
@@ -354,10 +656,7 @@ class MowoSzachyApp {
           const from = moveStr.substring(0, 2);
           const to = moveStr.substring(2, 4);
           const promotion = moveStr.length > 4 ? moveStr[4] : undefined;
-          const move = this.game.move({ from, to, promotion });
-          if (move) {
-            this.handleMoveSuccess(move, true);
-          }
+          this.makeMove({ from, to, promotion }, true);
         }
       } else if (this.pendingEngineAction === 'hint') {
         this.pendingEngineAction = null;
@@ -365,7 +664,7 @@ class MowoSzachyApp {
           const from = moveStr.substring(0, 2);
           const to = moveStr.substring(2, 4);
           const plDesc = this.formatMoveToPolish({ from, to });
-          this.speak(`Podpowiedź: najlepszy ruch to ${plDesc}`);
+          this.speak(`Podpowiedź: najlepszy ruch to ${plDesc}.`);
         }
       }
     }
@@ -373,7 +672,7 @@ class MowoSzachyApp {
 
   playEngineMove() {
     if (this.game.game_over()) {
-      this.speak('Partia jest zakończona.');
+      this.handleGameOver();
       return;
     }
     if (this.isEngineThinking || !this.stockfishReady) return;
@@ -381,8 +680,10 @@ class MowoSzachyApp {
     this.isEngineThinking = true;
     this.pendingEngineAction = 'play';
     this.setSpeechIndicator(true, 'Silnik myśli...');
+    this.el.engineEvalText.textContent = 'Ocena: obliczanie...';
+
     this.stockfish.postMessage(`position fen ${this.game.fen()}`);
-    this.stockfish.postMessage(`go depth ${this.engineDepth}`);
+    this.stockfish.postMessage(`go depth ${this.settings.engineDepth}`);
   }
 
   requestEngineHint() {
@@ -390,15 +691,16 @@ class MowoSzachyApp {
     this.pendingEngineAction = 'hint';
     this.setSpeechIndicator(true, 'Szukam najlepszego ruchu...');
     this.stockfish.postMessage(`position fen ${this.game.fen()}`);
-    this.stockfish.postMessage(`go depth ${this.engineDepth}`);
+    this.stockfish.postMessage(`go depth ${this.settings.engineDepth}`);
   }
 
-  // --- Move Management ---
-  makeMove(moveObj) {
+  // --- Move Execution & Game Loop ---
+  makeMove(moveObj, isEngine = false) {
     try {
       const res = this.game.move(moveObj);
       if (res) {
-        this.handleMoveSuccess(res, false);
+        this.lastMoveSquares = [res.from, res.to];
+        this.handleMoveSuccess(res, isEngine);
         return true;
       }
     } catch (e) {
@@ -410,79 +712,280 @@ class MowoSzachyApp {
   handleMoveSuccess(move, isEngineMove) {
     this.updateUI();
     const plMove = this.formatMoveToPolish(move);
-    const actor = isEngineMove ? 'Silnik zagrał: ' : 'Twój ruch: ';
-    const textToSpeak = `${actor}${plMove}. ${this.getCheckOrStatusSpeech()}`;
-
     this.el.lastMoveText.textContent = `Ostatni: ${move.san} (${plMove})`;
 
-    if (!isEngineMove && this.autoSpeakEngine) {
-      this.speak(textToSpeak);
-      // Automatically reply with engine move after brief pause if auto is configured
-    } else {
-      this.speak(textToSpeak);
+    // Check game termination immediately after move
+    if (this.game.game_over()) {
+      if (isEngineMove) this.playChime();
+      this.handleGameOver(move, isEngineMove);
+      return;
     }
 
-    // Trigger engine evaluation in background
-    if (this.stockfishReady && !this.game.game_over()) {
+    if (isEngineMove) {
+      // Sound alert when engine plays
+      this.playChime();
+
+      let speech = `Silnik zagrał: ${plMove}.`;
+      if (this.game.in_check()) speech += ' Szach!';
+      speech += ' Twój ruch.';
+
+      if (this.settings.autoSpeakEngine) {
+        this.speak(speech, false, () => {
+          if (this.settings.autoListenAfterEngine && !this.game.game_over()) {
+            this.toggleListening();
+          }
+        });
+      } else {
+        this.setDisplayText(speech);
+      }
+    } else {
+      // Human move
+      let speech = `Twój ruch: ${plMove}.`;
+      if (this.game.in_check()) speech += ' Szach!';
+
+      this.speak(speech);
+
+      // Trigger automatic engine response in vs-engine mode!
+      if (this.settings.gameMode === 'vs-engine' && this.settings.autoEngineResponse) {
+        if (this.game.turn() !== this.settings.playerColor) {
+          // Give brief pause for human move speech to commence
+          if (this.engineTimer) clearTimeout(this.engineTimer);
+          this.engineTimer = setTimeout(() => {
+            this.playEngineMove();
+          }, 650);
+        }
+      }
+    }
+
+    // Background evaluation update
+    if (this.stockfishReady && !this.isEngineThinking) {
       this.stockfish.postMessage(`position fen ${this.game.fen()}`);
-      this.stockfish.postMessage(`go depth 8`);
+      this.stockfish.postMessage(`go depth 6`);
     }
   }
 
+  // --- Game Over Handling ---
+  handleGameOver(lastMove = null, wasEngineMove = false) {
+    this.isEngineThinking = false;
+    this.pendingEngineAction = null;
+    this.updateUI();
+
+    let title = '';
+    let speech = '';
+
+    if (this.game.in_checkmate()) {
+      const loser = this.game.turn(); // The side whose turn it is lost
+      if (this.settings.gameMode === 'vs-engine') {
+        if (loser === this.settings.playerColor) {
+          title = 'Szach i mat! Silnik wygrywa.';
+          speech = 'Szach i mat! Silnik wygrał partię. Dobra gra! Kliknij nowa partia, aby zagrać ponownie.';
+        } else {
+          title = 'Szach i mat! Wygrałeś partię!';
+          speech = 'Szach i mat! Gratulacje, wygrałeś partię z silnikiem! Brawo!';
+        }
+      } else {
+        const winner = loser === 'w' ? 'czarne' : 'białe';
+        title = `Szach i mat! Wygrywają ${winner}.`;
+        speech = `Szach i mat! Partię wygrywają ${winner}.`;
+      }
+    } else if (this.game.in_stalemate()) {
+      title = 'Pat — remis!';
+      speech = 'Pat! Król nie ma legalnych ruchów i nie jest szachowany. Partia zakończona remisem.';
+    } else if (this.game.in_threefold_repetition()) {
+      title = 'Remis przez trzykrotne powtórzenie pozycji.';
+      speech = 'Remis przez trzykrotne powtórzenie tej samej pozycji.';
+    } else if (this.game.insufficient_material()) {
+      title = 'Remis — brak materiału.';
+      speech = 'Partia zakończona remisem z braku materiału matującego.';
+    } else if (this.game.in_draw()) {
+      title = 'Partia zremisowana.';
+      speech = 'Partia zakończona remisem.';
+    }
+
+    this.el.gameStatusText.textContent = ` — ${title}`;
+    this.speak(speech, true);
+  }
+
+  resignGame() {
+    if (this.game.game_over()) {
+      this.speak('Partia jest już zakończona.');
+      return;
+    }
+    const speech = 'Poddajesz partię. Silnik wygrywa. Chcesz zagrać jeszcze raz? Kliknij nowa partia.';
+    this.el.gameStatusText.textContent = ' — Poddanie partii';
+    this.speak(speech, true);
+  }
+
+  // --- Smart Undo ---
   undoMove() {
-    const undone = this.game.undo();
-    if (undone) {
-      this.updateUI();
-      const plMove = this.formatMoveToPolish(undone);
-      this.speak(`Cofnięto ruch ${plMove}. Ruch ${this.game.turn() === 'w' ? 'białych' : 'czarnych'}.`);
+    if (this.isEngineThinking) {
+      // Abort engine thinking and undo player's move
+      if (this.stockfish) this.stockfish.postMessage('stop');
+      this.isEngineThinking = false;
+      this.pendingEngineAction = null;
+
+      const undone = this.game.undo();
+      if (undone) {
+        this.updateLastMoveFromHistory();
+        this.updateUI();
+        this.speak('Zatrzymano silnik i cofnięto Twój ruch. Twój ruch.');
+        return;
+      }
+    }
+
+    if (this.settings.gameMode === 'vs-engine') {
+      // In vs-engine mode, undoing should revert to the player's turn (undo 2 half-moves)
+      const history = this.game.history();
+      if (history.length === 0) {
+        this.speak('Brak ruchów do cofnięcia.');
+        return;
+      }
+
+      // If it's player's turn, undo both engine move and previous player move
+      if (this.game.turn() === this.settings.playerColor) {
+        if (history.length === 1) {
+          // Engine made first move as White
+          this.game.undo();
+          this.updateLastMoveFromHistory();
+          this.updateUI();
+          this.speak('Cofnięto ruch początkowy silnika.');
+          return;
+        }
+
+        const engineMove = this.game.undo();
+        const playerMove = this.game.undo();
+        this.updateLastMoveFromHistory();
+        this.updateUI();
+
+        const plPlayer = this.formatMoveToPolish(playerMove);
+        this.speak(`Cofnięto ruch silnika oraz Twój ruch ${plPlayer}. Twój ruch.`);
+      } else {
+        // Human played, engine hasn't replied yet
+        const playerMove = this.game.undo();
+        this.updateLastMoveFromHistory();
+        this.updateUI();
+        this.speak('Cofnięto Twój ruch. Twój ruch.');
+      }
     } else {
-      this.speak('Brak ruchów do cofnięcia.');
+      // Analysis mode: undo 1 move
+      const undone = this.game.undo();
+      if (undone) {
+        this.updateLastMoveFromHistory();
+        this.updateUI();
+        const plMove = this.formatMoveToPolish(undone);
+        this.speak(`Cofnięto ruch ${plMove}. Ruch ${this.game.turn() === 'w' ? 'białych' : 'czarnych'}.`);
+      } else {
+        this.speak('Brak ruchów do cofnięcia.');
+      }
     }
   }
 
-  resetGame() {
+  updateLastMoveFromHistory() {
+    const history = this.game.history({ verbose: true });
+    if (history.length > 0) {
+      const last = history[history.length - 1];
+      this.lastMoveSquares = [last.from, last.to];
+      this.el.lastMoveText.textContent = `Ostatni: ${last.san} (${this.formatMoveToPolish(last)})`;
+    } else {
+      this.lastMoveSquares = [];
+      this.el.lastMoveText.textContent = 'Ostatni ruch: —';
+    }
+  }
+
+  repeatLastMove() {
+    const history = this.game.history({ verbose: true });
+    if (history.length > 0) {
+      const last = history[history.length - 1];
+      const actor = (this.settings.gameMode === 'vs-engine' && last.color !== this.settings.playerColor)
+        ? 'Silnik zagrał: '
+        : 'Ostatni ruch: ';
+      this.speak(`${actor}${this.formatMoveToPolish(last)}`);
+    } else {
+      this.speak('Nie wykonano jeszcze żadnego ruchu w tej partii.');
+    }
+  }
+
+  // --- New Game & Side Selection ---
+  showNewGameModal() {
+    this.el.newGameModal.classList.add('open');
+  }
+
+  closeNewGameModal() {
+    this.el.newGameModal.classList.remove('open');
+  }
+
+  startNewGame(color = 'w') {
+    if (this.engineTimer) clearTimeout(this.engineTimer);
+    this.closeNewGameModal();
+
+    this.settings.playerColor = color;
+    this.el.playerColorSelect.value = color;
+    this.saveSettings();
+
     this.game.reset();
+    this.lastMoveSquares = [];
+    this.selectedSquare = null;
+    this.isEngineThinking = false;
+    this.pendingEngineAction = null;
+
+    if (this.settings.autoFlipBoard) {
+      this.isBoardFlipped = (color === 'b');
+    }
+
     if (this.stockfishReady) {
       this.stockfish.postMessage('ucinewgame');
     }
+
+    this.updateModeLabels();
+    this.initBoardUI();
     this.updateUI();
-    this.speak('Rozpoczęto nową partię. Ustaw figury w pozycji początkowej. Ruch białych.');
+
+    if (this.settings.gameMode === 'vs-engine') {
+      if (color === 'w') {
+        this.speak('Rozpoczęto nową partię. Grasz białymi. Ustaw figury i wykonaj pierwszy ruch.');
+      } else {
+        this.speak('Rozpoczęto nową partię. Grasz czarnymi. Silnik rozpoczyna partię.', false, () => {
+          setTimeout(() => this.playEngineMove(), 500);
+        });
+      }
+    } else {
+      this.speak('Rozpoczęto nową partię w trybie analizy. Ruch białych.');
+    }
   }
 
-  // --- Polish Language Chess Position & Move Describer ---
+  toggleBoardFlip() {
+    this.isBoardFlipped = !this.isBoardFlipped;
+    this.initBoardUI();
+    this.renderBoardPieces();
+    this.speak(this.isBoardFlipped ? 'Odwrócono szachownicę dla czarnych' : 'Odwrócono szachownicę dla białych');
+  }
+
+  // --- Polish Position Describer ---
   formatMoveToPolish(move) {
     if (move.san === 'O-O') return 'krótka roszada';
     if (move.san === 'O-O-O') return 'długa roszada';
 
     const pieceName = PIECE_NAMES_PL[move.piece || 'p'] || 'figura';
-    const isCapture = move.flags.includes('c') || move.flags.includes('e');
+    const isCapture = move.flags && (move.flags.includes('c') || move.flags.includes('e'));
     const captureText = isCapture ? 'bije na' : 'na';
 
-    let desc = '';
-    if (move.piece === 'p') {
-      desc = `pionek ${captureText} ${move.to}`;
-    } else {
-      desc = `${pieceName} ${captureText} ${move.to}`;
+    let desc = `${pieceName} ${captureText} ${move.to}`;
+
+    if (move.promotion) {
+      const promoName = PIECE_NAMES_PL[move.promotion] || 'hetman';
+      desc += `, promocja na ${promoName}`;
     }
 
-    if (move.san.includes('#')) desc += ', szach i mat';
-    else if (move.san.includes('+')) desc += ', szach';
+    if (move.san && move.san.includes('#')) desc += ', szach i mat';
+    else if (move.san && move.san.includes('+')) desc += ', szach';
 
     return desc;
-  }
-
-  getCheckOrStatusSpeech() {
-    if (this.game.in_checkmate()) return 'Szach i mat! Koniec partii.';
-    if (this.game.in_draw()) return 'Partia zakończona remisem.';
-    if (this.game.in_check()) return 'Szach!';
-    return `Ruch ${this.game.turn() === 'w' ? 'białych' : 'czarnych'}.`;
   }
 
   readFullPosition() {
     const board = this.game.board();
     const whitePieces = [];
     const blackPieces = [];
-
     const order = ['k', 'q', 'r', 'b', 'n', 'p'];
 
     for (let r = 0; r < 8; r++) {
@@ -522,29 +1025,36 @@ class MowoSzachyApp {
     this.speak(fullSpeech);
   }
 
-  // --- Visual Chess Board Renderer (for phone verification) ---
+  // --- Visual Chess Board Renderer ---
   initBoardUI() {
     this.el.chessboard.innerHTML = '';
-    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
-    for (let rank = 8; rank >= 1; rank--) {
-      for (let fileIdx = 0; fileIdx < 8; fileIdx++) {
-        const file = files[fileIdx];
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const ranks = [8, 7, 6, 5, 4, 3, 2, 1];
+
+    const activeFiles = this.isBoardFlipped ? [...files].reverse() : files;
+    const activeRanks = this.isBoardFlipped ? [...ranks].reverse() : ranks;
+
+    for (let rIdx = 0; rIdx < 8; rIdx++) {
+      const rank = activeRanks[rIdx];
+      for (let fIdx = 0; fIdx < 8; fIdx++) {
+        const file = activeFiles[fIdx];
         const squareId = `${file}${rank}`;
-        const isLight = (fileIdx + rank) % 2 !== 0;
+        const fileOrigIdx = file.charCodeAt(0) - 97;
+        const isLight = (fileOrigIdx + rank) % 2 !== 0;
 
         const sq = document.createElement('div');
         sq.className = `square ${isLight ? 'light' : 'dark'}`;
         sq.dataset.square = squareId;
 
-        // Coordinate hints on borders
-        if (file === 'a') {
+        // Border coordinates
+        if (fIdx === 0) {
           const rankLabel = document.createElement('span');
           rankLabel.className = 'coord-label coord-rank';
           rankLabel.textContent = rank;
           sq.appendChild(rankLabel);
         }
-        if (rank === 1) {
+        if (rIdx === 7) {
           const fileLabel = document.createElement('span');
           fileLabel.className = 'coord-label coord-file';
           fileLabel.textContent = file;
@@ -567,13 +1077,18 @@ class MowoSzachyApp {
       const rank = parseInt(squareId[1], 10);
       const piece = board[8 - rank][fileIdx];
 
-      // Remove existing piece symbol span
+      // Remove old piece span
       const existing = sq.querySelector('.piece-symbol');
       if (existing) existing.remove();
 
-      sq.classList.remove('selected');
+      // Highlights
+      sq.classList.remove('selected', 'last-move');
+
       if (this.selectedSquare === squareId) {
         sq.classList.add('selected');
+      }
+      if (this.lastMoveSquares.includes(squareId)) {
+        sq.classList.add('last-move');
       }
 
       if (piece) {
@@ -599,9 +1114,9 @@ class MowoSzachyApp {
       this.selectedSquare = null;
 
       if (from !== to) {
-        const move = this.makeMove({ from, to, promotion: 'q' });
+        const move = this.makeMove({ from, to, promotion: 'q' }, false);
         if (!move) {
-          // If clicked another own piece, select it instead
+          // If clicked another own piece, select that piece
           const piece = this.game.get(to);
           if (piece && piece.color === this.game.turn()) {
             this.selectedSquare = to;
@@ -638,48 +1153,45 @@ class MowoSzachyApp {
   }
 
   attachEventListeners() {
-    // Actions
+    // Quick Side Toggle
+    this.el.btnSideToggle.addEventListener('click', () => {
+      this.showNewGameModal();
+    });
+
+    this.el.modePill.addEventListener('click', () => {
+      this.el.settingsModal.classList.add('open');
+    });
+
+    // Main Actions
     this.el.btnReadPosition.addEventListener('click', () => this.readFullPosition());
     this.el.btnVoiceInput.addEventListener('click', () => this.toggleListening());
     this.el.btnPlayEngineMove.addEventListener('click', () => this.playEngineMove());
     this.el.btnReadHint.addEventListener('click', () => this.requestEngineHint());
-    this.el.btnReadLastMove.addEventListener('click', () => {
-      const history = this.game.history({ verbose: true });
-      if (history.length > 0) {
-        const last = history[history.length - 1];
-        this.speak(`Ostatni ruch: ${this.formatMoveToPolish(last)}`);
-      } else {
-        this.speak('Nie wykonano jeszcze żadnego ruchu.');
-      }
-    });
+    this.el.btnReadLastMove.addEventListener('click', () => this.repeatLastMove());
 
+    // Aux Bar
     this.el.btnUndoMove.addEventListener('click', () => this.undoMove());
-    this.el.btnNewGame.addEventListener('click', () => {
-      if (confirm('Czy na pewno chcesz zacząć nową partię?')) {
-        this.resetGame();
-      }
-    });
-
+    this.el.btnNewGame.addEventListener('click', () => this.showNewGameModal());
+    this.el.btnFlipBoard.addEventListener('click', () => this.toggleBoardFlip());
     this.el.btnCopyFen.addEventListener('click', () => {
       navigator.clipboard.writeText(this.game.fen()).then(() => {
-        this.speak('Skopiowano pozycję do schowka');
+        this.speak('Skopiowano pozycję do schowka.');
       });
     });
 
-    // Manual input
+    // Manual Input
     const executeManualMove = () => {
       const val = this.el.manualMoveInput.value.trim();
       if (!val) return;
       this.handleVoiceCommand(val);
       this.el.manualMoveInput.value = '';
     };
-
     this.el.btnSendManualMove.addEventListener('click', executeManualMove);
     this.el.manualMoveInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') executeManualMove();
     });
 
-    // Board Accordion
+    // Board Accordion Toggle
     this.el.boardToggle.addEventListener('click', () => {
       this.el.boardAccordion.classList.toggle('expanded');
     });
@@ -697,27 +1209,86 @@ class MowoSzachyApp {
       }
     });
 
-    this.el.speechRate.addEventListener('input', (e) => {
-      this.speechRate = parseFloat(e.target.value);
-      this.el.speechRateVal.textContent = this.speechRate.toFixed(2);
+    // Settings Inputs
+    this.el.gameModeSelect.addEventListener('change', (e) => {
+      this.settings.gameMode = e.target.value;
+      this.saveSettings();
+      this.updateModeLabels();
+    });
+
+    this.el.playerColorSelect.addEventListener('change', (e) => {
+      const newColor = e.target.value;
+      this.settings.playerColor = newColor;
+      this.saveSettings();
+      this.updateModeLabels();
+    });
+
+    this.el.autoEngineResponse.addEventListener('change', (e) => {
+      this.settings.autoEngineResponse = e.target.checked;
+      this.saveSettings();
+    });
+
+    this.el.autoListenAfterEngine.addEventListener('change', (e) => {
+      this.settings.autoListenAfterEngine = e.target.checked;
+      this.saveSettings();
+    });
+
+    this.el.soundAlert.addEventListener('change', (e) => {
+      this.settings.soundAlert = e.target.checked;
+      this.saveSettings();
+    });
+
+    this.el.autoFlipBoard.addEventListener('change', (e) => {
+      this.settings.autoFlipBoard = e.target.checked;
+      this.saveSettings();
     });
 
     this.el.engineDepth.addEventListener('input', (e) => {
-      this.engineDepth = parseInt(e.target.value, 10);
-      this.el.engineDepthVal.textContent = this.engineDepth;
+      this.settings.engineDepth = parseInt(e.target.value, 10);
+      this.el.engineDepthVal.textContent = this.settings.engineDepth;
+      this.saveSettings();
+    });
+
+    this.el.speechRate.addEventListener('input', (e) => {
+      this.settings.speechRate = parseFloat(e.target.value);
+      this.el.speechRateVal.textContent = this.settings.speechRate.toFixed(2);
+      this.saveSettings();
     });
 
     this.el.descriptionStyle.addEventListener('change', (e) => {
-      this.descriptionStyle = e.target.value;
+      this.settings.descriptionStyle = e.target.value;
+      this.saveSettings();
     });
 
     this.el.autoSpeakEngineMove.addEventListener('change', (e) => {
-      this.autoSpeakEngine = e.target.checked;
+      this.settings.autoSpeakEngine = e.target.checked;
+      this.saveSettings();
+    });
+
+    // New Game Modal Buttons
+    this.el.btnCloseNewGame.addEventListener('click', () => this.closeNewGameModal());
+    this.el.newGameModal.addEventListener('click', (e) => {
+      if (e.target === this.el.newGameModal) this.closeNewGameModal();
+    });
+
+    this.el.btnChooseWhite.addEventListener('click', () => {
+      this.startNewGame('w');
+    });
+
+    this.el.btnChooseBlack.addEventListener('click', () => {
+      this.startNewGame('b');
     });
   }
 }
 
-// Start app when DOM is ready
-window.addEventListener('DOMContentLoaded', () => {
-  window.app = new MowoSzachyApp();
-});
+// Export class
+export { MowoSzachyApp };
+
+// Start app when DOM is ready (or immediately if already loaded)
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', () => {
+    if (!window.app) window.app = new MowoSzachyApp();
+  });
+} else {
+  if (!window.app) window.app = new MowoSzachyApp();
+}

@@ -77,20 +77,24 @@ flowchart TD
   - Podstawowy interfejs mobilny, moduł TTS i STT po polsku, obsługa ruchów.
   - Inicjalizacja repozytorium Git i pierwszy commit.
 
-- [ ] **Etap 1: Dopracowanie Słownika Mowy i Stabilności Rozpoznawania**
-  - Fonetyczny parser polskich komend szachowych (obsługa wariantów wymowy liter: *a, be, ce, de, e, ef, gie, ha*, cyfr *1-8* oraz nazw figur).
-  - Tryb ciągłego nasłuchu z auto-wznawianiem na telefonie.
-  - Zaawansowane komunikaty TTS (roszady, promocje pionów, bicia w przelocie).
+- [x] **Etap 1: Tryb Gry z Silnikiem (Stockfish) i Automatyczna Rozgrywka**
+  - Domyślny tryb gry z silnikiem: automatyczna odpowiedź Stockfisha po ruchu gracza (brak konieczności klikania po każdym ruchu).
+  - Wybór strony (Białe / Czarne): silnik automatycznie rozpoczyna partię pierwszym ruchem, gdy gracz wybierze Czarne.
+  - Fonetyczny parser polskich komend szachowych i ruchów (obsługa liter: *a-h*, liczb *1-8*, figur *skoczek/koń, goniec/laufer, wieża, hetman/dama, król, pion*, roszad i bicia).
+  - Inteligentne cofanie ruchów w trybie silnika (cofnięcie ruchu silnika i poprzedzającego ruchu gracza).
+  - Sygnał dźwiękowy (gong Web Audio) po wykonaniu ruchu przez silnik.
+  - Podświetlanie pól ostatniego ruchu (`from`, `to`) na szachownicy kontrolnej oraz automatyczne odwracanie deski dla czarnych.
+  - Zapisywanie i odczyt preferencji w `localStorage`.
 
-- [ ] **Etap 2: Baza Zadań Taktycznych i Dyktowanie Pozycji**
-  - Przygotowanie bazy JSON z 100+ zadaniami (Lichess Puzzles z polskimi tytułami i motywami).
+- [x] **Etap 3: Ustawienia, Personalizacja i Dźwięk**
+  - Wybór głosu lektora, prędkości czytania (0.7x – 1.4x).
+  - Konfiguracja siły silnika (głębokość analizy 2–18).
+  - Opcjonalny auto-nasłuch mikrofonu po wypowiedzeniu ruchu przez silnik.
+
+- [ ] **Etap 2: Baza Zadań Taktycznych i Dyktowanie Pozycji (Kolejny krok)**
+  - Przygotowanie bazy JSON z zadaniami taktycznymi (zgodnie z życzeniem użytkownika: realizowane po pełnej grze z silnikiem).
   - Dedykowany ekran/widok "Trening Taktyki": wybór poziomu, przyciski nawigacji zadań.
   - Funkcja "Dyktuj krok po kroku" (pauzy między figurami, powtórz partię figur).
-
-- [ ] **Etap 3: Ustawienia, Personalizacja i Tryb Ciemny/Kontrastowy**
-  - Wybór głosu lektora, prędkości czytania (0.7x – 1.4x).
-  - Konfiguracja siły silnika (poziomy 1–10, czas namysłu).
-  - Dźwiękowe powiadomienia (krótki gong/sygnał przed wypowiedzeniem ruchu).
 
 - [ ] **Etap 4: Publikacja na GitHub i Wdrożenie GitHub Pages**
   - Konfiguracja GitHub Actions / branch `main` dla GitHub Pages.
