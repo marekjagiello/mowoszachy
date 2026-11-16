@@ -41,6 +41,11 @@ def main():
                     py_files.append(rel)
 
     js_files = ['js/app.js']
+    modules_dir = os.path.join(root, 'js', 'modules')
+    if os.path.exists(modules_dir):
+        for fn in os.listdir(modules_dir):
+            if fn.endswith('.js'):
+                js_files.append(os.path.relpath(os.path.join(modules_dir, fn), root))
 
     all_ok = True
     for f in py_files:
