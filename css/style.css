@@ -14,6 +14,10 @@
   --board-light: #e2d6b5;
   --board-dark: #b88b4a;
   --board-highlight: #f6e05e;
+  --piece-glow-white-size: 5px;
+  --piece-glow-white-opacity: 0.85;
+  --piece-glow-black-size: 5px;
+  --piece-glow-black-opacity: 0.85;
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 20px;
@@ -578,8 +582,22 @@ body {
   height: 86%;
   object-fit: contain;
   pointer-events: none;
+  transition: transform 0.1s ease, filter 0.12s ease;
+}
+
+/* Contrast glows: Dark glow for white pieces, light glow for black pieces */
+.piece-img.piece-white {
+  filter: drop-shadow(0 0 calc(var(--piece-glow-white-size, 5px) * 0.4) rgba(0, 0, 0, var(--piece-glow-white-opacity, 0.85)))
+          drop-shadow(0 0 var(--piece-glow-white-size, 5px) rgba(0, 0, 0, var(--piece-glow-white-opacity, 0.85)));
+}
+
+.piece-img.piece-black {
+  filter: drop-shadow(0 0 calc(var(--piece-glow-black-size, 5px) * 0.4) rgba(255, 255, 255, var(--piece-glow-black-opacity, 0.85)))
+          drop-shadow(0 0 var(--piece-glow-black-size, 5px) rgba(255, 255, 255, var(--piece-glow-black-opacity, 0.85)));
+}
+
+.piece-img:not(.piece-white):not(.piece-black) {
   filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.5));
-  transition: transform 0.1s ease;
 }
 
 .square:active .piece-img {
@@ -852,4 +870,229 @@ body {
 .btn-choice-color.black:hover, .btn-choice-color.black:active {
   border-color: #a855f7;
   background: rgba(168, 85, 247, 0.15);
+}
+
+/* ==========================================================================
+   Piece Glow Settings & Live Preview (Mobile-First)
+   ========================================================================== */
+.btn-quick-glow {
+  width: 100%;
+  background: var(--bg-accent);
+  border: 1px dashed rgba(96, 165, 250, 0.45);
+  color: #93c5fd;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.btn-quick-glow:hover, .btn-quick-glow:active {
+  background: rgba(37, 99, 235, 0.2);
+  border-color: #60a5fa;
+  color: #ffffff;
+}
+
+.glow-settings-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.glow-settings-desc {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* Live Preview Card */
+.glow-preview-box {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.glow-preview-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.glow-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.glow-preview-square {
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+.glow-preview-square.light {
+  background-color: var(--board-light, #e2d6b5);
+}
+
+.glow-preview-square.dark {
+  background-color: var(--board-dark, #b88b4a);
+}
+
+.glow-preview-square .piece-img {
+  width: 78%;
+  height: 78%;
+}
+
+.glow-sq-tag {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1;
+  margin-top: 2px;
+  color: #0f172a;
+  text-shadow: 0 0 2px rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+
+.glow-preview-square.dark .glow-sq-tag {
+  color: #f8fafc;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Glow Control Groups */
+.glow-control-group {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.glow-control-group.white-glow-group {
+  border-left: 3px solid #e2e8f0;
+}
+
+.glow-control-group.black-glow-group {
+  border-left: 3px solid #38bdf8;
+}
+
+.glow-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.glow-piece-dot {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.glow-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.glow-slider-header label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.glow-slider {
+  width: 100%;
+  height: 40px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+  touch-action: pan-y;
+}
+
+.setting-group.compact {
+  margin-bottom: 0;
+  gap: 4px;
+}
+
+/* Glow Presets */
+.glow-presets-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.glow-presets-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.glow-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+@media (min-width: 480px) {
+  .glow-presets-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.btn-glow-preset {
+  background: var(--bg-accent);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 10px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-glow-preset:hover, .btn-glow-preset:active {
+  background: var(--primary);
+  border-color: var(--primary-hover);
+  color: #ffffff;
+}
+
+.btn-glow-preset.active {
+  background: #2563eb;
+  border-color: #60a5fa;
+  color: #ffffff;
 }

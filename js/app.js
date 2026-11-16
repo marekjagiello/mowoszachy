@@ -37,6 +37,10 @@ const DEFAULT_SETTINGS = {
   autoFlipBoard: true,
   boardTheme: 'wood',          // 'wood' | 'zelda'
   boardBgOpacity: 100,         // 0 - 100 (temporary test)
+  pieceGlowWhiteSize: 5,       // 0 - 15 px (temporary test)
+  pieceGlowWhiteOpacity: 85,   // 0 - 100 % (temporary test)
+  pieceGlowBlackSize: 5,       // 0 - 15 px (temporary test)
+  pieceGlowBlackOpacity: 85,   // 0 - 100 % (temporary test)
   engineDepth: 10,
   speechRate: 1.0,
   descriptionStyle: 'detailed',
@@ -126,6 +130,61 @@ class MowoSzachyApp {
       this.applyBoardBgOpacity(opVal);
       this.updateOpacityPresetButtons(opVal);
     }
+
+    this.syncPieceGlowToUI();
+  }
+
+  applyPieceGlow() {
+    const whiteSize = this.settings.pieceGlowWhiteSize !== undefined ? this.settings.pieceGlowWhiteSize : 5;
+    const whiteOpacity = this.settings.pieceGlowWhiteOpacity !== undefined ? this.settings.pieceGlowWhiteOpacity : 85;
+    const blackSize = this.settings.pieceGlowBlackSize !== undefined ? this.settings.pieceGlowBlackSize : 5;
+    const blackOpacity = this.settings.pieceGlowBlackOpacity !== undefined ? this.settings.pieceGlowBlackOpacity : 85;
+
+    const root = document.documentElement;
+    root.style.setProperty('--piece-glow-white-size', `${whiteSize}px`);
+    root.style.setProperty('--piece-glow-white-opacity', (whiteOpacity / 100).toFixed(2));
+    root.style.setProperty('--piece-glow-black-size', `${blackSize}px`);
+    root.style.setProperty('--piece-glow-black-opacity', (blackOpacity / 100).toFixed(2));
+  }
+
+  syncPieceGlowToUI() {
+    const whiteSize = this.settings.pieceGlowWhiteSize !== undefined ? this.settings.pieceGlowWhiteSize : 5;
+    const whiteOpacity = this.settings.pieceGlowWhiteOpacity !== undefined ? this.settings.pieceGlowWhiteOpacity : 85;
+    const blackSize = this.settings.pieceGlowBlackSize !== undefined ? this.settings.pieceGlowBlackSize : 5;
+    const blackOpacity = this.settings.pieceGlowBlackOpacity !== undefined ? this.settings.pieceGlowBlackOpacity : 85;
+
+    if (this.el.pieceGlowWhiteSize) {
+      this.el.pieceGlowWhiteSize.value = whiteSize;
+      if (this.el.pieceGlowWhiteSizeVal) this.el.pieceGlowWhiteSizeVal.textContent = `${whiteSize}px`;
+    }
+    if (this.el.pieceGlowWhiteOpacity) {
+      this.el.pieceGlowWhiteOpacity.value = whiteOpacity;
+      if (this.el.pieceGlowWhiteOpacityVal) this.el.pieceGlowWhiteOpacityVal.textContent = `${whiteOpacity}%`;
+    }
+    if (this.el.pieceGlowBlackSize) {
+      this.el.pieceGlowBlackSize.value = blackSize;
+      if (this.el.pieceGlowBlackSizeVal) this.el.pieceGlowBlackSizeVal.textContent = `${blackSize}px`;
+    }
+    if (this.el.pieceGlowBlackOpacity) {
+      this.el.pieceGlowBlackOpacity.value = blackOpacity;
+      if (this.el.pieceGlowBlackOpacityVal) this.el.pieceGlowBlackOpacityVal.textContent = `${blackOpacity}%`;
+    }
+
+    this.applyPieceGlow();
+    this.updateGlowPresetButtons(whiteSize, whiteOpacity, blackSize, blackOpacity);
+  }
+
+  updateGlowPresetButtons(wSize, wOp, bSize, bOp) {
+    const presetBtns = document.querySelectorAll('.btn-glow-preset');
+    presetBtns.forEach(btn => {
+      const p = btn.dataset.preset;
+      let isActive = false;
+      if (p === 'subtle' && wSize === 3 && wOp === 60 && bSize === 3 && bOp === 60) isActive = true;
+      else if (p === 'default' && wSize === 5 && wOp === 85 && bSize === 5 && bOp === 85) isActive = true;
+      else if (p === 'strong' && wSize === 8 && wOp === 100 && bSize === 8 && bOp === 100) isActive = true;
+      else if (p === 'off' && wSize === 0 && wOp === 0 && bSize === 0 && bOp === 0) isActive = true;
+      btn.classList.toggle('active', isActive);
+    });
   }
 
   applyBoardTheme() {
@@ -243,6 +302,18 @@ class MowoSzachyApp {
       speechRateVal: document.getElementById('speechRateVal'),
       descriptionStyle: document.getElementById('descriptionStyle'),
       autoSpeakEngineMove: document.getElementById('autoSpeakEngineMove'),
+
+      // Piece Glow (temporary visual test)
+      pieceGlowWhiteSize: document.getElementById('pieceGlowWhiteSize'),
+      pieceGlowWhiteSizeVal: document.getElementById('pieceGlowWhiteSizeVal'),
+      pieceGlowWhiteOpacity: document.getElementById('pieceGlowWhiteOpacity'),
+      pieceGlowWhiteOpacityVal: document.getElementById('pieceGlowWhiteOpacityVal'),
+      pieceGlowBlackSize: document.getElementById('pieceGlowBlackSize'),
+      pieceGlowBlackSizeVal: document.getElementById('pieceGlowBlackSizeVal'),
+      pieceGlowBlackOpacity: document.getElementById('pieceGlowBlackOpacity'),
+      pieceGlowBlackOpacityVal: document.getElementById('pieceGlowBlackOpacityVal'),
+      glowSettingsHeader: document.getElementById('glowSettingsHeader'),
+      btnQuickOpenGlowSettings: document.getElementById('btnQuickOpenGlowSettings'),
 
       // New Game Modal
       newGameModal: document.getElementById('newGameModal'),
@@ -1175,7 +1246,8 @@ class MowoSzachyApp {
 
       if (piece) {
         const img = document.createElement('img');
-        img.className = 'piece-img';
+        img.className = `piece-img piece-${piece.color === 'w' ? 'white' : 'black'}`;
+        img.dataset.pieceColor = piece.color;
         img.src = `assets/pieces/${piece.color}_${piece.type}.png`;
         img.alt = `${piece.color === 'w' ? 'Biały' : 'Czarny'} ${PIECE_NAMES_PL[piece.type] || piece.type}`;
         img.draggable = false;
@@ -1365,6 +1437,94 @@ class MowoSzachyApp {
         this.applyBoardTheme();
       });
     }
+
+    // Quick button from chessboard accordion to glow settings
+    if (this.el.btnQuickOpenGlowSettings) {
+      this.el.btnQuickOpenGlowSettings.addEventListener('click', () => {
+        this.el.settingsModal.classList.add('open');
+        if (this.el.glowSettingsHeader) {
+          setTimeout(() => {
+            this.el.glowSettingsHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 150);
+        }
+      });
+    }
+
+    // Piece Glow Sliders (temporary testing controls)
+    if (this.el.pieceGlowWhiteSize) {
+      this.el.pieceGlowWhiteSize.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        this.settings.pieceGlowWhiteSize = val;
+        if (this.el.pieceGlowWhiteSizeVal) this.el.pieceGlowWhiteSizeVal.textContent = `${val}px`;
+        this.applyPieceGlow();
+        this.updateGlowPresetButtons(this.settings.pieceGlowWhiteSize, this.settings.pieceGlowWhiteOpacity, this.settings.pieceGlowBlackSize, this.settings.pieceGlowBlackOpacity);
+      });
+      this.el.pieceGlowWhiteSize.addEventListener('change', () => this.saveSettings());
+    }
+
+    if (this.el.pieceGlowWhiteOpacity) {
+      this.el.pieceGlowWhiteOpacity.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        this.settings.pieceGlowWhiteOpacity = val;
+        if (this.el.pieceGlowWhiteOpacityVal) this.el.pieceGlowWhiteOpacityVal.textContent = `${val}%`;
+        this.applyPieceGlow();
+        this.updateGlowPresetButtons(this.settings.pieceGlowWhiteSize, this.settings.pieceGlowWhiteOpacity, this.settings.pieceGlowBlackSize, this.settings.pieceGlowBlackOpacity);
+      });
+      this.el.pieceGlowWhiteOpacity.addEventListener('change', () => this.saveSettings());
+    }
+
+    if (this.el.pieceGlowBlackSize) {
+      this.el.pieceGlowBlackSize.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        this.settings.pieceGlowBlackSize = val;
+        if (this.el.pieceGlowBlackSizeVal) this.el.pieceGlowBlackSizeVal.textContent = `${val}px`;
+        this.applyPieceGlow();
+        this.updateGlowPresetButtons(this.settings.pieceGlowWhiteSize, this.settings.pieceGlowWhiteOpacity, this.settings.pieceGlowBlackSize, this.settings.pieceGlowBlackOpacity);
+      });
+      this.el.pieceGlowBlackSize.addEventListener('change', () => this.saveSettings());
+    }
+
+    if (this.el.pieceGlowBlackOpacity) {
+      this.el.pieceGlowBlackOpacity.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        this.settings.pieceGlowBlackOpacity = val;
+        if (this.el.pieceGlowBlackOpacityVal) this.el.pieceGlowBlackOpacityVal.textContent = `${val}%`;
+        this.applyPieceGlow();
+        this.updateGlowPresetButtons(this.settings.pieceGlowWhiteSize, this.settings.pieceGlowWhiteOpacity, this.settings.pieceGlowBlackSize, this.settings.pieceGlowBlackOpacity);
+      });
+      this.el.pieceGlowBlackOpacity.addEventListener('change', () => this.saveSettings());
+    }
+
+    // Piece Glow Preset Buttons
+    const glowPresetBtns = document.querySelectorAll('.btn-glow-preset');
+    glowPresetBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const preset = btn.dataset.preset;
+        if (preset === 'subtle') {
+          this.settings.pieceGlowWhiteSize = 3;
+          this.settings.pieceGlowWhiteOpacity = 60;
+          this.settings.pieceGlowBlackSize = 3;
+          this.settings.pieceGlowBlackOpacity = 60;
+        } else if (preset === 'default') {
+          this.settings.pieceGlowWhiteSize = 5;
+          this.settings.pieceGlowWhiteOpacity = 85;
+          this.settings.pieceGlowBlackSize = 5;
+          this.settings.pieceGlowBlackOpacity = 85;
+        } else if (preset === 'strong') {
+          this.settings.pieceGlowWhiteSize = 8;
+          this.settings.pieceGlowWhiteOpacity = 100;
+          this.settings.pieceGlowBlackSize = 8;
+          this.settings.pieceGlowBlackOpacity = 100;
+        } else if (preset === 'off') {
+          this.settings.pieceGlowWhiteSize = 0;
+          this.settings.pieceGlowWhiteOpacity = 0;
+          this.settings.pieceGlowBlackSize = 0;
+          this.settings.pieceGlowBlackOpacity = 0;
+        }
+        this.syncPieceGlowToUI();
+        this.saveSettings();
+      });
+    });
 
     this.el.engineDepth.addEventListener('input', (e) => {
       this.settings.engineDepth = parseInt(e.target.value, 10);

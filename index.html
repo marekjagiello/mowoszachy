@@ -137,6 +137,9 @@
             <button type="button" class="btn-opacity-preset" data-val="25">25%</button>
             <button type="button" class="btn-opacity-preset" data-val="0">0%</button>
           </div>
+          <button type="button" id="btnQuickOpenGlowSettings" class="btn-quick-glow" title="Dostosuj poświatę bierek w Ustawieniach">
+            <span>✨ Poświata bierek (suwaki w Ustawieniach ⚙️)</span>
+          </button>
         </div>
 
         <div id="chessboard" class="board-container"></div>
@@ -241,6 +244,105 @@
         </div>
       </div>
 
+      <!-- Poświata bierek (test wizualny) -->
+      <div class="settings-section-title" id="glowSettingsHeader">✨ Poświata bierek (test widoczności)</div>
+
+      <div class="glow-settings-card">
+        <p class="glow-settings-desc">
+          Zwiększa kontrast i widoczność bierek: ciemna poświata dla bierek białych oraz jasna poświata dla bierek czarnych.
+        </p>
+
+        <!-- Podgląd bierek na żywo -->
+        <div class="glow-preview-box">
+          <div class="glow-preview-label">Podgląd na żywo na polach szachownicy:</div>
+          <div class="glow-preview-grid">
+            <div class="glow-preview-square light" title="Biała figura na jasnym polu">
+              <img src="assets/pieces/w_k.png" class="piece-img piece-white" alt="Biały król">
+              <span class="glow-sq-tag">Biała / Jasne</span>
+            </div>
+            <div class="glow-preview-square dark" title="Biała figura na ciemnym polu">
+              <img src="assets/pieces/w_n.png" class="piece-img piece-white" alt="Biały skoczek">
+              <span class="glow-sq-tag">Biała / Ciemne</span>
+            </div>
+            <div class="glow-preview-square light" title="Czarna figura na jasnym polu">
+              <img src="assets/pieces/b_n.png" class="piece-img piece-black" alt="Czarny skoczek">
+              <span class="glow-sq-tag">Czarna / Jasne</span>
+            </div>
+            <div class="glow-preview-square dark" title="Czarna figura na ciemnym polu">
+              <img src="assets/pieces/b_k.png" class="piece-img piece-black" alt="Czarny król">
+              <span class="glow-sq-tag">Czarna / Ciemne</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sekcja: Białe bierki (ciemna poświata) -->
+        <div class="glow-control-group white-glow-group">
+          <div class="glow-group-header">
+            <span class="glow-piece-dot">⚪</span>
+            <span class="glow-group-title">Białe bierki — Ciemna poświata</span>
+          </div>
+
+          <div class="setting-group compact">
+            <div class="glow-slider-header">
+              <label for="pieceGlowWhiteSize">Rozmiar poświaty (promień):</label>
+              <span id="pieceGlowWhiteSizeVal" class="board-opacity-badge">5px</span>
+            </div>
+            <div class="setting-control">
+              <input type="range" id="pieceGlowWhiteSize" min="0" max="15" step="1" value="5" class="glow-slider" aria-label="Rozmiar ciemnej poświaty dla białych bierek">
+            </div>
+          </div>
+
+          <div class="setting-group compact">
+            <div class="glow-slider-header">
+              <label for="pieceGlowWhiteOpacity">Krycie / intensywność:</label>
+              <span id="pieceGlowWhiteOpacityVal" class="board-opacity-badge">85%</span>
+            </div>
+            <div class="setting-control">
+              <input type="range" id="pieceGlowWhiteOpacity" min="0" max="100" step="5" value="85" class="glow-slider" aria-label="Krycie ciemnej poświaty dla białych bierek">
+            </div>
+          </div>
+        </div>
+
+        <!-- Sekcja: Czarne bierki (jasna poświata) -->
+        <div class="glow-control-group black-glow-group">
+          <div class="glow-group-header">
+            <span class="glow-piece-dot">⚫</span>
+            <span class="glow-group-title">Czarne bierki — Jasna poświata</span>
+          </div>
+
+          <div class="setting-group compact">
+            <div class="glow-slider-header">
+              <label for="pieceGlowBlackSize">Rozmiar poświaty (promień):</label>
+              <span id="pieceGlowBlackSizeVal" class="board-opacity-badge">5px</span>
+            </div>
+            <div class="setting-control">
+              <input type="range" id="pieceGlowBlackSize" min="0" max="15" step="1" value="5" class="glow-slider" aria-label="Rozmiar jasnej poświaty dla czarnych bierek">
+            </div>
+          </div>
+
+          <div class="setting-group compact">
+            <div class="glow-slider-header">
+              <label for="pieceGlowBlackOpacity">Krycie / intensywność:</label>
+              <span id="pieceGlowBlackOpacityVal" class="board-opacity-badge">85%</span>
+            </div>
+            <div class="setting-control">
+              <input type="range" id="pieceGlowBlackOpacity" min="0" max="100" step="5" value="85" class="glow-slider" aria-label="Krycie jasnej poświaty dla czarnych bierek">
+            </div>
+          </div>
+        </div>
+
+        <!-- Presety poświaty -->
+        <div class="glow-presets-section">
+          <span class="glow-presets-label">Szybkie presety poświaty:</span>
+          <div class="glow-presets-grid">
+            <button type="button" class="btn-glow-preset" data-preset="subtle">Subtelna (3px)</button>
+            <button type="button" class="btn-glow-preset active" data-preset="default">Optymalna (5px)</button>
+            <button type="button" class="btn-glow-preset" data-preset="strong">Mocna (8px)</button>
+            <button type="button" class="btn-glow-preset" data-preset="off">Wyłączona (0px)</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Silnik Stockfish -->
       <div class="settings-section-title">Silnik szachowy Stockfish</div>
 
@@ -299,12 +401,12 @@
       </p>
       <div class="color-select-grid">
         <button id="btnChooseWhite" class="btn-choice-color white">
-          <img src="assets/pieces/w_k.png" class="choice-img" alt="Białe">
+          <img src="assets/pieces/w_k.png" class="choice-img piece-img piece-white" alt="Białe">
           <span class="choice-title">Graj Białymi</span>
           <span class="choice-sub">Rozpoczynasz partię ruchem</span>
         </button>
         <button id="btnChooseBlack" class="btn-choice-color black">
-          <img src="assets/pieces/b_k.png" class="choice-img" alt="Czarne">
+          <img src="assets/pieces/b_k.png" class="choice-img piece-img piece-black" alt="Czarne">
           <span class="choice-title">Graj Czarnymi</span>
           <span class="choice-sub">Silnik wykona pierwszy ruch</span>
         </button>
