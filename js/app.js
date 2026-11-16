@@ -31,6 +31,7 @@ const PIECE_SYMBOLS = {
 const DEFAULT_SETTINGS = {
   gameMode: 'vs-engine',       // 'vs-engine' | 'analysis'
   playerColor: 'w',            // 'w' | 'b'
+  botName: 'Janusz',           // Wake-word / bot name (np. "Janusz e4", "Janusz proponuję remis")
   autoEngineResponse: true,
   autoListenAfterEngine: false,
   soundAlert: true,
@@ -46,7 +47,7 @@ const DEFAULT_SETTINGS = {
   descriptionStyle: 'detailed',
   autoSpeakEngine: true,
   voiceIndex: -1,
-  settingsVersion: 2
+  settingsVersion: 3
 };
 
 class MowoSzachyApp {
@@ -66,6 +67,13 @@ class MowoSzachyApp {
     this.isFullscreenBoard = false;
     this.recognition = null;
     this.isListening = false;
+    this.isListeningRequested = false;
+    this.isTemporarilyPausedForTTS = false;
+    this.isSpeaking = false;
+    this.wakeWordArmedUntil = 0;
+    this.customGameEnd = null; // 'draw_agreed' | 'resigned' | null
+    this.latestEval = null;    // { fen, type: 'cp'|'mate', evalScore, cp, mate }
+    this.restartListeningTimer = null;
     this.currentVoice = null;
 
     // Load user settings or defaults
@@ -90,13 +98,14 @@ class MowoSzachyApp {
       const stored = localStorage.getItem('mowoszachy_settings');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.settingsVersion !== 2) {
-          parsed.boardBgOpacity = 50;
-          parsed.pieceGlowWhiteSize = 5;
-          parsed.pieceGlowWhiteOpacity = 85;
-          parsed.pieceGlowBlackSize = 5;
-          parsed.pieceGlowBlackOpacity = 85;
-          parsed.settingsVersion = 2;
+        if (parsed.settingsVersion !== 3) {
+          if (parsed.boardBgOpacity === undefined) parsed.boardBgOpacity = 50;
+          if (parsed.pieceGlowWhiteSize === undefined) parsed.pieceGlowWhiteSize = 5;
+          if (parsed.pieceGlowWhiteOpacity === undefined) parsed.pieceGlowWhiteOpacity = 85;
+          if (parsed.pieceGlowBlackSize === undefined) parsed.pieceGlowBlackSize = 5;
+          if (parsed.pieceGlowBlackOpacity === undefined) parsed.pieceGlowBlackOpacity = 85;
+          if (!parsed.botName) parsed.botName = 'Janusz';
+          parsed.settingsVersion = 3;
         }
         return { ...DEFAULT_SETTINGS, ...parsed };
       }
@@ -117,6 +126,9 @@ class MowoSzachyApp {
   syncSettingsToUI() {
     this.el.gameModeSelect.value = this.settings.gameMode;
     this.el.playerColorSelect.value = this.settings.playerColor;
+    if (this.el.botNameInput) {
+      this.el.botNameInput.value = this.settings.botName || 'Janusz';
+    }
     this.el.autoEngineResponse.checked = this.settings.autoEngineResponse;
     this.el.autoListenAfterEngine.checked = this.settings.autoListenAfterEngine;
     this.el.soundAlert.checked = this.settings.soundAlert;
@@ -236,7 +248,8 @@ class MowoSzachyApp {
     if (this.settings.gameMode === 'vs-engine') {
       const sideName = this.settings.playerColor === 'w' ? 'Białe' : 'Czarne';
       const engineSide = this.settings.playerColor === 'w' ? 'Czarne' : 'Białe';
-      this.el.modeLabelText.textContent = `Gracz (${sideName}) vs Silnik (${engineSide})`;
+      const botName = this.settings.botName || 'Janusz';
+      this.el.modeLabelText.textContent = `Gracz (${sideName}) vs ${botName} (${engineSide})`;
       this.el.sideLabel.textContent = `Gram: ${sideName}`;
       this.el.sideIcon.textContent = this.settings.playerColor === 'w' ? '⚪' : '⚫';
     } else {
@@ -244,6 +257,10 @@ class MowoSzachyApp {
       this.el.sideLabel.textContent = 'Analiza';
       this.el.sideIcon.textContent = '🔍';
     }
+  }
+
+  isGameOver() {
+    return Boolean(this.customGameEnd) || this.game.game_over();
   }
 
   initElements() {
@@ -314,6 +331,7 @@ class MowoSzachyApp {
       btnCloseSettings: document.getElementById('btnCloseSettings'),
       gameModeSelect: document.getElementById('gameModeSelect'),
       playerColorSelect: document.getElementById('playerColorSelect'),
+      botNameInput: document.getElementById('botNameInput'),
       autoEngineResponse: document.getElementById('autoEngineResponse'),
       autoListenAfterEngine: document.getElementById('autoListenAfterEngine'),
       soundAlert: document.getElementById('soundAlert'),
@@ -455,6 +473,13 @@ class MowoSzachyApp {
       window.speechSynthesis.cancel();
     }
 
+    // Temporarily pause recognition to prevent the bot from hearing itself
+    if (this.recognition && this.isListening) {
+      this.isTemporarilyPausedForTTS = true;
+      try { this.recognition.abort(); } catch (e) {}
+    }
+    this.isSpeaking = true;
+
     this.setDisplayText(text);
     this.setSpeechIndicator(true, 'Czytam na głos...');
 
@@ -464,15 +489,26 @@ class MowoSzachyApp {
     utterance.rate = this.settings.speechRate;
     utterance.pitch = 1.0;
 
-    utterance.onend = () => {
+    const finishSpeech = () => {
+      this.isSpeaking = false;
       this.setSpeechIndicator(false, 'Gotowy');
       if (onEnd) onEnd();
+      if (this.isTemporarilyPausedForTTS) {
+        this.isTemporarilyPausedForTTS = false;
+        if (this.isListeningRequested && !this.isGameOver()) {
+          setTimeout(() => {
+            if (this.isListeningRequested && !this.isSpeaking && !this.isGameOver()) {
+              this.startListening();
+            }
+          }, 200);
+        }
+      }
     };
 
+    utterance.onend = finishSpeech;
     utterance.onerror = (err) => {
       remoteLog('WARN', 'Speech error: ' + (err.error || 'unknown'));
-      this.setSpeechIndicator(false, 'Gotowy');
-      if (onEnd) onEnd();
+      finishSpeech();
     };
 
     window.speechSynthesis.speak(utterance);
@@ -502,37 +538,57 @@ class MowoSzachyApp {
 
     this.recognition = new SpeechRecognition();
     this.recognition.lang = 'pl-PL';
-    this.recognition.continuous = false;
+    this.recognition.continuous = true;
     this.recognition.interimResults = false;
 
     this.recognition.onstart = () => {
       this.isListening = true;
       this.el.btnVoiceInput.classList.add('listening');
+      const bot = this.settings.botName || 'Janusz';
       this.el.voiceBtnLabel.textContent = 'Słucham...';
       if (this.el.btnFsVoice) this.el.btnFsVoice.classList.add('listening');
       if (this.el.fsVoiceLabel) this.el.fsVoiceLabel.textContent = 'Słucham...';
-      this.setSpeechIndicator(true, 'Nasłuchuję ruchu...');
+      this.setSpeechIndicator(true, `Słucham (hasło: «${bot}»)...`);
     };
 
     this.recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.trim();
+      const resultsLen = event.results.length;
+      const lastResult = event.results[resultsLen - 1];
+      const transcript = lastResult[0].transcript.trim();
       remoteLog('INFO', 'Speech recognized: ' + transcript);
-      this.handleVoiceCommand(transcript);
+      this.handleVoiceCommand(transcript, false);
     };
 
     this.recognition.onerror = (event) => {
       remoteLog('WARN', 'Speech recognition error: ' + event.error);
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        this.speak('Nie dosłyszałem ruchu. Spróbuj ponownie.', false, () => {
-          if (!this.game.game_over()) {
-            setTimeout(() => this.startListening(), 250);
-          }
-        });
+      if (event.error === 'not-allowed') {
+        this.isListeningRequested = false;
+        this.stopListening();
+        this.speak('Brak uprawnień do mikrofonu. Zezwól na dostęp w przeglądarce.');
       }
+      // 'no-speech' or 'aborted' are normal while thinking, do not complain or stop
     };
 
     this.recognition.onend = () => {
       this.isListening = false;
+      if (this.restartListeningTimer) clearTimeout(this.restartListeningTimer);
+
+      // Continuous listening while player thinks: auto-restart if requested
+      if (this.isListeningRequested && !this.isSpeaking && !this.isTemporarilyPausedForTTS && !this.isGameOver()) {
+        this.restartListeningTimer = setTimeout(() => {
+          if (this.isListeningRequested && !this.isSpeaking && !this.isTemporarilyPausedForTTS && !this.isGameOver()) {
+            try {
+              this.recognition.start();
+            } catch (e) {
+              if (e.name !== 'InvalidStateError') {
+                remoteLog('WARN', 'Could not restart recognition: ' + e.message);
+              }
+            }
+          }
+        }, 150);
+        return;
+      }
+
       this.el.btnVoiceInput.classList.remove('listening');
       this.el.voiceBtnLabel.textContent = 'Powiedz ruch';
       if (this.el.btnFsVoice) this.el.btnFsVoice.classList.remove('listening');
@@ -543,6 +599,7 @@ class MowoSzachyApp {
 
   startListening() {
     if (!this.recognition) return;
+    this.isListeningRequested = true;
     try {
       if (window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
@@ -560,20 +617,59 @@ class MowoSzachyApp {
   }
 
   stopListening() {
+    this.isListeningRequested = false;
+    if (this.restartListeningTimer) clearTimeout(this.restartListeningTimer);
     if (!this.recognition) return;
     try {
       this.recognition.stop();
     } catch (e) {}
     this.isListening = false;
+    this.el.btnVoiceInput.classList.remove('listening');
+    this.el.voiceBtnLabel.textContent = 'Powiedz ruch';
+    if (this.el.btnFsVoice) this.el.btnFsVoice.classList.remove('listening');
+    if (this.el.fsVoiceLabel) this.el.fsVoiceLabel.textContent = 'Głos';
+    this.setSpeechIndicator(false, 'Gotowy');
   }
 
   toggleListening() {
     if (!this.recognition) return;
-    if (this.isListening) {
+    if (this.isListeningRequested || this.isListening) {
       this.stopListening();
     } else {
       this.startListening();
     }
+  }
+
+  // --- Polish Wake-Word & Bot Name Extractor ---
+  extractBotCommand(rawText, botName = 'Janusz') {
+    const trimmed = (rawText || '').trim();
+    if (!trimmed) {
+      return { hasBotName: false, command: '', raw: rawText };
+    }
+
+    if (!botName || !botName.trim()) {
+      return { hasBotName: true, command: trimmed, raw: rawText };
+    }
+
+    const nameClean = botName.trim().toLowerCase();
+    const escapeRegex = (s) => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+
+    let namePattern = escapeRegex(nameClean);
+    if (nameClean === 'janusz') {
+      namePattern = '(?:janusz[uea]?|januszek|januszku)';
+    } else {
+      namePattern = `${namePattern}(?:[uea]|em|owi|ku)?`;
+    }
+
+    const wakeRegex = new RegExp(`^(?:(?:hej|ej|okej|no)\\s+)?${namePattern}(?:[,.!?:;\\s]+|$)`, 'i');
+    const match = trimmed.match(wakeRegex);
+
+    if (!match) {
+      return { hasBotName: false, command: '', raw: rawText };
+    }
+
+    const command = trimmed.slice(match[0].length).trim();
+    return { hasBotName: true, command, raw: rawText };
   }
 
   // --- Polish Chess Voice & Text Parser ---
@@ -637,10 +733,54 @@ class MowoSzachyApp {
     return text;
   }
 
-  handleVoiceCommand(raw) {
-    const rawLower = raw.toLowerCase().trim();
+  handleVoiceCommand(raw, bypassWakeWord = false) {
+    if (!raw || !raw.trim()) return;
+
+    const botName = this.settings.botName || 'Janusz';
+    let commandToProcess = raw.trim();
+
+    if (!bypassWakeWord) {
+      const { hasBotName, command } = this.extractBotCommand(raw, botName);
+
+      // Check if wake word matched
+      if (!hasBotName) {
+        // If bot name was called within the last 10 seconds, allow followup without repeating the name
+        if (Date.now() < this.wakeWordArmedUntil) {
+          commandToProcess = raw.trim();
+          this.wakeWordArmedUntil = 0;
+        } else {
+          // Player is thinking aloud! Keep listening indefinitely, don't execute or complain.
+          remoteLog('INFO', `Ignored thinking aloud (no wake word "${botName}"): "${raw}"`);
+          this.setDisplayText(`(Myślisz na głos: "${raw}" — powiedz np. «${botName} e4» lub «${botName} proponuję remis»)`);
+          this.setSpeechIndicator(true, `Słucham (hasło: «${botName}»)...`);
+          return;
+        }
+      } else {
+        // Has bot name
+        if (!command) {
+          // Player just called the bot's name (e.g. "Janusz", "Januszu!")
+          this.wakeWordArmedUntil = Date.now() + 10000;
+          this.speak('Słucham! Jaki ruch?', false, () => {
+            if (this.isListeningRequested && !this.isGameOver()) {
+              setTimeout(() => this.startListening(), 250);
+            }
+          });
+          return;
+        }
+        commandToProcess = command;
+      }
+    }
+
+    const rawLower = commandToProcess.toLowerCase().trim();
 
     // 1. Spoken Application Commands
+    // Draw Proposal ("Janusz proponuję remis" / "Janusz zróbmy remis")
+    const drawRegex = /\b(remis|remisu|remisem|zróbmy remis|proponuj[eę]\s+remis|oferuj[eę]\s+remis|zgoda na remis|propozycja remisu)\b/i;
+    if (drawRegex.test(rawLower)) {
+      this.handleDrawProposal();
+      return;
+    }
+
     if (rawLower.includes('nowa partia') || rawLower.includes('zacznij od nowa') || rawLower.includes('zresetuj')) {
       this.showNewGameModal();
       return;
@@ -725,11 +865,11 @@ class MowoSzachyApp {
     }
 
     // 2. Parse as a chess move
-    const clean = this.normalizePolishSpeech(raw);
-    remoteLog('INFO', `Speech parsed: "${raw}" -> "${clean}"`);
+    const clean = this.normalizePolishSpeech(commandToProcess);
+    remoteLog('INFO', `Speech parsed: "${raw}" -> "${commandToProcess}" -> "${clean}"`);
 
     const legalMoves = this.game.moves({ verbose: true });
-    if (legalMoves.length === 0) {
+    if (legalMoves.length === 0 || this.isGameOver()) {
       this.speak('Partia jest już zakończona.');
       return;
     }
@@ -737,17 +877,21 @@ class MowoSzachyApp {
     let matchedMove = this.findMatchingMove(clean, legalMoves);
 
     if (matchedMove) {
+      // Turn action received: end active listening session for this turn
+      this.isListeningRequested = false;
       const res = this.makeMove(matchedMove, false);
       if (!res) {
         this.speak('Niepoprawny ruch. Spróbuj jeszcze raz.', false, () => {
-          if (!this.game.game_over()) {
+          if (!this.isGameOver()) {
+            this.isListeningRequested = true;
             setTimeout(() => this.startListening(), 250);
           }
         });
       }
     } else {
-      this.speak(`Rozpoznano: "${raw}". To nie jest poprawny ruch w tej pozycji. Spróbuj jeszcze raz.`, false, () => {
-        if (!this.game.game_over()) {
+      this.speak(`Rozpoznano: "${commandToProcess}". To nie jest poprawny ruch w tej pozycji. Spróbuj jeszcze raz.`, false, () => {
+        if (!this.isGameOver()) {
+          this.isListeningRequested = true;
           setTimeout(() => this.startListening(), 250);
         }
       });
@@ -866,9 +1010,24 @@ class MowoSzachyApp {
       if (cpMatch) {
         const cp = parseInt(cpMatch[1], 10);
         const evalScore = (this.game.turn() === 'w' ? cp : -cp) / 100;
+        this.latestEval = {
+          fen: this.game.fen(),
+          type: 'cp',
+          evalScore: evalScore,
+          cp: cp,
+          turn: this.game.turn()
+        };
         this.el.engineEvalText.textContent = `Ocena: ${evalScore > 0 ? '+' : ''}${evalScore.toFixed(1)}`;
       } else if (mateMatch) {
-        this.el.engineEvalText.textContent = `Mat w ${mateMatch[1]}`;
+        const mateVal = parseInt(mateMatch[1], 10);
+        const whiteMate = (this.game.turn() === 'w' ? mateVal : -mateVal);
+        this.latestEval = {
+          fen: this.game.fen(),
+          type: 'mate',
+          mate: whiteMate,
+          turn: this.game.turn()
+        };
+        this.el.engineEvalText.textContent = `Mat w ${mateVal}`;
       }
     }
 
@@ -888,6 +1047,11 @@ class MowoSzachyApp {
       // Jeśli pozycja zmieniła się w międzyczasie, ignoruj nieaktualny wynik
       if (actionFen && actionFen !== this.game.fen()) {
         remoteLog('INFO', `Ignored outdated bestmove ${moveStr} for old FEN`);
+        return;
+      }
+
+      if (actionType === 'draw_offer') {
+        this.decideEngineDrawProposal();
         return;
       }
 
@@ -936,14 +1100,16 @@ class MowoSzachyApp {
 
           const speechText = `${hintPrefix} ${plDesc}.`;
           this.el.engineEvalText.textContent = `Podpowiedź: ${moveSan}`;
-          this.el.speechSubtitle.textContent = `💡 ${hintPrefix} ${plDesc} (${moveSan})`;
+          if (this.el.speechDisplayText) {
+            this.el.speechDisplayText.textContent = `💡 ${hintPrefix} ${plDesc} (${moveSan})`;
+          }
 
           // Podświetl pole początkowe bierki na szachownicy
           this.selectedSquare = from;
           this.renderBoardPieces();
 
           this.speak(speechText, false, () => {
-            if (this.settings.autoListenAfterEngine && !this.game.game_over()) {
+            if (this.settings.autoListenAfterEngine && !this.isGameOver()) {
               setTimeout(() => this.startListening(), 250);
             }
           });
@@ -952,6 +1118,134 @@ class MowoSzachyApp {
         }
       }
     }
+  }
+
+  // --- Draw Proposal Handling ("Janusz proponuję remis") ---
+  handleDrawProposal() {
+    if (this.isGameOver()) {
+      this.speak('Partia jest już zakończona.');
+      return;
+    }
+
+    if (this.settings.gameMode !== 'vs-engine') {
+      this.acceptDraw('Partia zakończona remisem po uzgodnieniu stron.');
+      return;
+    }
+
+    const botName = this.settings.botName || 'Janusz';
+
+    // If we already have recent evaluation for this exact position, decide immediately
+    if (this.latestEval && this.latestEval.fen === this.game.fen()) {
+      this.decideEngineDrawProposal();
+      return;
+    }
+
+    // Otherwise, request quick evaluation from Stockfish
+    if (this.stockfishReady) {
+      this.setDisplayText(`${botName}: Zastanawiam się nad propozycją remisu...`);
+      this.setSpeechIndicator(true, 'Analizuję remis...');
+
+      this.stopAndQueueEngine(() => {
+        const currentFen = this.game.fen();
+        this.isEngineThinking = true;
+        this.pendingEngineAction = { type: 'draw_offer', fen: currentFen };
+        this.stockfish.postMessage(`position fen ${currentFen}`);
+        this.stockfish.postMessage('go depth 8');
+      });
+
+      // Safety timeout in case worker doesn't respond promptly
+      setTimeout(() => {
+        if (this.pendingEngineAction && this.pendingEngineAction.type === 'draw_offer') {
+          this.pendingEngineAction = null;
+          this.decideEngineDrawProposal();
+        }
+      }, 700);
+    } else {
+      this.decideEngineDrawProposal();
+    }
+  }
+
+  getEngineAdvantagePawns() {
+    const engineColor = this.settings.playerColor === 'w' ? 'b' : 'w';
+
+    if (this.latestEval && this.latestEval.fen === this.game.fen()) {
+      if (this.latestEval.type === 'mate') {
+        const isEngineMating = (engineColor === 'w' && this.latestEval.mate > 0) ||
+                               (engineColor === 'b' && this.latestEval.mate < 0);
+        return isEngineMating ? 999 : -999;
+      }
+      if (this.latestEval.type === 'cp') {
+        return engineColor === 'w' ? this.latestEval.evalScore : -this.latestEval.evalScore;
+      }
+    }
+
+    return this.calculateMaterialAdvantage(engineColor);
+  }
+
+  calculateMaterialAdvantage(color) {
+    const weights = { p: 1, n: 3, b: 3.2, r: 5, q: 9, k: 0 };
+    let whiteMat = 0;
+    let blackMat = 0;
+    const board = this.game.board();
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = board[r][c];
+        if (piece) {
+          const val = weights[piece.type] || 0;
+          if (piece.color === 'w') whiteMat += val;
+          else blackMat += val;
+        }
+      }
+    }
+    return color === 'w' ? (whiteMat - blackMat) : (blackMat - whiteMat);
+  }
+
+  decideEngineDrawProposal() {
+    const botName = this.settings.botName || 'Janusz';
+    const advantage = this.getEngineAdvantagePawns();
+    remoteLog('INFO', `Draw evaluation for ${botName}: engine advantage = ${advantage.toFixed(2)} pawns`);
+
+    // Significant advantage threshold: > 1.3 pawns (or forced mate)
+    const SIGNIFICANT_ADVANTAGE_THRESHOLD = 1.3;
+
+    if (advantage > SIGNIFICANT_ADVANTAGE_THRESHOLD) {
+      // Reject draw
+      let reason = 'Moja pozycja jest zbyt dobra, gramy dalej! Twój ruch.';
+      if (advantage >= 3.0) {
+        reason = 'Mam zbyt dużą przewagę, nie mogę przyjąć remisu! Twój ruch.';
+      }
+
+      const speech = `Odrzucam propozycję remisu. ${reason}`;
+      this.setDisplayText(`${botName}: ${speech}`);
+      this.speak(speech, false, () => {
+        if (this.settings.autoListenAfterEngine && !this.isGameOver() && this.game.turn() === this.settings.playerColor) {
+          this.isListeningRequested = true;
+          setTimeout(() => this.startListening(), 250);
+        }
+      });
+    } else {
+      // Accept draw
+      let comment = 'Dobra partia!';
+      if (advantage < -1.0) {
+        comment = 'Miałeś lepszą pozycję, chętnie przyjmuję remis!';
+      } else {
+        comment = 'Zgadzam się na remis, wyrównana walka! Dobra partia.';
+      }
+      this.acceptDraw(`${botName}: ${comment}`);
+    }
+  }
+
+  acceptDraw(message) {
+    this.customGameEnd = 'draw_agreed';
+    if (this.engineTimer) clearTimeout(this.engineTimer);
+    this.isEngineThinking = false;
+    this.pendingEngineAction = null;
+    this.stopListening();
+
+    this.updateUI();
+    this.el.gameStatusText.textContent = ' — Remis (zgoda stron)';
+    this.setDisplayText(message);
+    this.speak('Zgadzam się na remis! Partia zakończona remisem.', true);
   }
 
   stopAndQueueEngine(callback) {
@@ -966,7 +1260,7 @@ class MowoSzachyApp {
   }
 
   playEngineMove() {
-    if (this.game.game_over()) {
+    if (this.isGameOver()) {
       this.handleGameOver();
       return;
     }
@@ -985,7 +1279,7 @@ class MowoSzachyApp {
   }
 
   requestEngineHint() {
-    if (this.game.game_over()) {
+    if (this.isGameOver()) {
       this.speak('Partia jest już zakończona.');
       return;
     }
@@ -1037,7 +1331,7 @@ class MowoSzachyApp {
     this.el.lastMoveText.textContent = `Ostatni: ${move.san} (${plMove})`;
 
     // Check game termination immediately after move
-    if (this.game.game_over()) {
+    if (this.isGameOver()) {
       if (isEngineMove) this.playChime();
       this.handleGameOver(move, isEngineMove);
       return;
@@ -1053,7 +1347,7 @@ class MowoSzachyApp {
 
       if (this.settings.autoSpeakEngine) {
         this.speak(speech, false, () => {
-          if (this.settings.autoListenAfterEngine && !this.game.game_over()) {
+          if (this.settings.autoListenAfterEngine && !this.isGameOver()) {
             setTimeout(() => this.startListening(), 250);
           }
         });
@@ -1131,10 +1425,13 @@ class MowoSzachyApp {
   }
 
   resignGame() {
-    if (this.game.game_over()) {
+    if (this.isGameOver()) {
       this.speak('Partia jest już zakończona.');
       return;
     }
+    this.customGameEnd = 'resigned';
+    this.stopListening();
+    this.updateUI();
     const speech = 'Poddajesz partię. Silnik wygrywa. Chcesz zagrać jeszcze raz? Kliknij nowa partia.';
     this.el.gameStatusText.textContent = ' — Poddanie partii';
     this.speak(speech, true);
@@ -1142,6 +1439,13 @@ class MowoSzachyApp {
 
   // --- Smart Undo ---
   undoMove() {
+    if (this.customGameEnd) {
+      this.customGameEnd = null;
+      this.updateUI();
+      this.speak('Cofnięto zakończenie partii. Wznawiamy grę.');
+      return;
+    }
+
     if (this.isEngineThinking) {
       // Abort engine thinking and undo player's move
       if (this.stockfish) this.stockfish.postMessage('stop');
@@ -1251,6 +1555,8 @@ class MowoSzachyApp {
     this.selectedSquare = null;
     this.isEngineThinking = false;
     this.pendingEngineAction = null;
+    this.customGameEnd = null;
+    this.latestEval = null;
 
     if (this.settings.autoFlipBoard) {
       this.isBoardFlipped = (color === 'b');
@@ -1334,12 +1640,14 @@ class MowoSzachyApp {
     this.el.fsTurnLabel.textContent = isWhite ? 'Ruch Białych' : 'Ruch Czarnych';
 
     if (this.el.fsStatusBadge) {
-      if (this.game.in_checkmate()) {
+      if (this.customGameEnd === 'draw_agreed' || this.game.in_draw()) {
+        this.el.fsStatusBadge.textContent = ' — REMIS';
+      } else if (this.customGameEnd === 'resigned') {
+        this.el.fsStatusBadge.textContent = ' — PODDANIE';
+      } else if (this.game.in_checkmate()) {
         this.el.fsStatusBadge.textContent = ' — MAT!';
       } else if (this.game.in_check()) {
         this.el.fsStatusBadge.textContent = ' — SZACH';
-      } else if (this.game.in_draw()) {
-        this.el.fsStatusBadge.textContent = ' — REMIS';
       } else {
         this.el.fsStatusBadge.textContent = '';
       }
@@ -1537,7 +1845,11 @@ class MowoSzachyApp {
     const moveNumber = Math.floor(history.length / 2) + 1;
     this.el.moveCount.textContent = `Ruch ${moveNumber}`;
 
-    if (this.game.in_checkmate()) {
+    if (this.customGameEnd === 'draw_agreed') {
+      this.el.gameStatusText.textContent = ' — REMIS (ZGODA STRON)';
+    } else if (this.customGameEnd === 'resigned') {
+      this.el.gameStatusText.textContent = ' — PODDANIE PARTII';
+    } else if (this.game.in_checkmate()) {
       this.el.gameStatusText.textContent = ' — MAT!';
     } else if (this.game.in_check()) {
       this.el.gameStatusText.textContent = ' — SZACH';
@@ -1623,7 +1935,10 @@ class MowoSzachyApp {
     const executeManualMove = () => {
       const val = this.el.manualMoveInput.value.trim();
       if (!val) return;
-      this.handleVoiceCommand(val);
+      // Allow both direct move ("e4") and wake-word addressed move ("Janusz e4")
+      const { command } = this.extractBotCommand(val, this.settings.botName);
+      const inputToUse = command || val;
+      this.handleVoiceCommand(inputToUse, true);
       this.el.manualMoveInput.value = '';
     };
     this.el.btnSendManualMove.addEventListener('click', executeManualMove);
@@ -1694,6 +2009,16 @@ class MowoSzachyApp {
       this.saveSettings();
       this.updateModeLabels();
     });
+
+    if (this.el.botNameInput) {
+      this.el.botNameInput.addEventListener('input', (e) => {
+        this.settings.botName = e.target.value.trim() || 'Janusz';
+        this.updateModeLabels();
+      });
+      this.el.botNameInput.addEventListener('change', () => {
+        this.saveSettings();
+      });
+    }
 
     this.el.autoEngineResponse.addEventListener('change', (e) => {
       this.settings.autoEngineResponse = e.target.checked;

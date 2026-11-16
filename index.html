@@ -70,7 +70,7 @@
         </div>
       </div>
       <div class="speech-display-text" id="speechDisplayText">
-        Ustaw figury na fizycznej szachownicy i powiedz lub wybierz ruch.
+        Ustaw figury na szachownicy i powiedz ruch zaczynając od imienia bota (np. "Janusz e4").
       </div>
       <div class="speech-display-sub">
         <span id="lastMoveText">Ostatni ruch: —</span>
@@ -209,6 +209,16 @@
             <option value="analysis">Dwóch graczy / Analiza pozycji</option>
           </select>
         </div>
+      </div>
+
+      <div class="setting-group">
+        <label for="botNameInput">Imię bota (hasło wywołania):</label>
+        <div class="setting-control">
+          <input type="text" id="botNameInput" value="Janusz" placeholder="np. Janusz" maxlength="24" autocomplete="off" autocorrect="off">
+        </div>
+        <p class="setting-subtext">
+          Rozpocznij wypowiedź od tego imienia (domyślnie: <strong>Janusz</strong>, np. <em>"Janusz e4"</em>, <em>"Janusz koń na g2"</em>, <em>"Janusz proponuję remis"</em>). Pozwala to myśleć na głos bez przypadkowego wykonywania ruchów.
+        </p>
       </div>
 
       <div class="setting-group">

@@ -52,10 +52,32 @@ def normalize_polish_speech(raw: str) -> str:
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
+def extract_bot_command(raw_text: str, bot_name: str = 'Janusz'):
+    trimmed = (raw_text or '').strip()
+    if not trimmed:
+        return False, ''
+    if not bot_name or not bot_name.strip():
+        return True, trimmed
+    name_clean = bot_name.strip().lower()
+    if name_clean == 'janusz':
+        name_pattern = r'(?:janusz[uea]?|januszek|januszku)'
+    else:
+        escaped = re.escape(name_clean)
+        name_pattern = rf'{escaped}(?:[uea]|em|owi|ku)?'
+    wake_regex = re.compile(rf'^(?:(?:hej|ej|okej|no)\s+)?{name_pattern}(?:[,.!?:;\s]+|$)', re.IGNORECASE)
+    match = wake_regex.match(trimmed)
+    if not match:
+        return False, ''
+    command = trimmed[match.end():].strip()
+    return True, command
+
+DRAW_REGEX = re.compile(r'\b(remis|remisu|remisem|zróbmy remis|proponuj[eę]\s+remis|oferuj[eę]\s+remis|zgoda na remis|propozycja remisu)\b', re.IGNORECASE)
+
 TEST_CASES = [
     ("Pion na e4", "P e4"),
     ("skoczek na f3", "N f3"),
     ("koń na f3", "N f3"),
+    ("koń na g2", "N g2"),
     ("kucyk na f3", "N f3"),
     ("laufer na c4", "B c4"),
     ("laufrem na c4", "B c4"),
@@ -71,9 +93,48 @@ TEST_CASES = [
     ("koń c trzy", "N c3")
 ]
 
+WAKE_WORD_TEST_CASES = [
+    ("Janusz e4", True, "e4"),
+    ("Janusz koń na g2", True, "koń na g2"),
+    ("Janusz, koń na g2", True, "koń na g2"),
+    ("Januszu koń na g2", True, "koń na g2"),
+    ("Januszu, pion na d4", True, "pion na d4"),
+    ("Janusz proponuję remis", True, "proponuję remis"),
+    ("Januszu proponuję remis", True, "proponuję remis"),
+    ("Janusz zróbmy remis", True, "zróbmy remis"),
+    ("Janusz remis", True, "remis"),
+    ("Janusz, czy remis?", True, "czy remis?"),
+    ("Hej Janusz e4", True, "e4"),
+    ("Okej Janusz skoczek f3", True, "skoczek f3"),
+    ("Januszek wieża b1", True, "wieża b1"),
+    ("Januszku cofnij ruch", True, "cofnij ruch"),
+    ("Janusz", True, ""),
+    ("No i co teraz... może pion na e4?", False, ""),
+    ("hmm koń na g2", False, ""),
+    ("czekaj, muszę pomyśleć", False, ""),
+    ("proponuję remis", False, "")
+]
+
+DRAW_TEST_CASES = [
+    ("proponuję remis", True),
+    ("proponuje remis", True),
+    ("zróbmy remis", True),
+    ("remis", True),
+    ("czy remis?", True),
+    ("oferuję remis", True),
+    ("zgoda na remis", True),
+    ("propozycja remisu", True),
+    ("e4", False),
+    ("koń na g2", False),
+    ("podpowiedz", False)
+]
+
 def run_tests():
     passed = 0
-    print(f"=== Uruchamianie {len(TEST_CASES)} testów fonetyki szachowej MowoSzachy ===")
+    total = len(TEST_CASES) + len(WAKE_WORD_TEST_CASES) + len(DRAW_TEST_CASES)
+    print(f"=== Uruchamianie {total} testów fonetyki, hasła wywołania i komend szachowych MowoSzachy ===")
+
+    print("\n--- 1. Normalizacja fonetyczna posunięć ---")
     for raw, expected in TEST_CASES:
         actual = normalize_polish_speech(raw)
         if actual == expected:
@@ -81,9 +142,27 @@ def run_tests():
             passed += 1
         else:
             print(f"  [FAIL] '{raw}' -> Otrzymano: '{actual}', Oczekiwano: '{expected}'")
-            
-    print(f"Wynik testów fonetyki: {passed}/{len(TEST_CASES)} zaliczonych.")
-    if passed != len(TEST_CASES):
+
+    print("\n--- 2. Wykrywanie imienia bota / Wake-word ('Janusz') ---")
+    for raw, exp_has, exp_cmd in WAKE_WORD_TEST_CASES:
+        has_bot, cmd = extract_bot_command(raw, "Janusz")
+        if has_bot == exp_has and (not exp_has or cmd == exp_cmd):
+            print(f"  [PASS] '{raw}' -> HasBot={has_bot}, Cmd='{cmd}'")
+            passed += 1
+        else:
+            print(f"  [FAIL] '{raw}' -> HasBot={has_bot} (exp {exp_has}), Cmd='{cmd}' (exp '{exp_cmd}')")
+
+    print("\n--- 3. Wykrywanie propozycji remisu ---")
+    for raw, exp_draw in DRAW_TEST_CASES:
+        is_draw = bool(DRAW_REGEX.search(raw))
+        if is_draw == exp_draw:
+            print(f"  [PASS] '{raw}' -> IsDraw={is_draw}")
+            passed += 1
+        else:
+            print(f"  [FAIL] '{raw}' -> IsDraw={is_draw} (exp {exp_draw})")
+
+    print(f"\nWynik testów fonetyki i logiki mowy: {passed}/{total} zaliczonych.")
+    if passed != total:
         sys.exit(1)
     return True
 
