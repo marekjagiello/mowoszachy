@@ -56,3 +56,6 @@ Główna idea: Gracz siedzi przy prawdziwej, fizycznej szachownicy. Telefon leż
    - Serwer testujemy przez `./start.sh` i weryfikujemy logi w `app_console.log` (lub `./check_logs.sh`).
    - Przed zatwierdzeniem kodu weryfikujemy brak błędów składniowych i regresji fonetycznej.
    - Commituj każdą zakończoną i przetestowaną zmianę w git z czytelnym opisem po polsku.
+
+7. **Autonomiczne Uruchamianie Skryptów Python**:
+   - Model ma pełne uprawnienie do uruchamiania lokalnych skryptów Python (`python3`, np. `server.py`, skryptów w `tools/`, benchmarków mowy, serwerów narzędziowych) bezpośrednio za pomocą narzędzia `run_command` bez pytania użytkownika o potwierdzenie lub pozwolenie w czacie.

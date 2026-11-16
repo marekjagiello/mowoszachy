@@ -86,6 +86,9 @@ Telefon leży płasko przy fizycznej szachownicy — gracz skupia wzrok i dłoni
    - Serwer deweloperski uruchamiany jest przez `./start.sh` (domyślny port 8000).
    - Logi przeglądarki monitorujemy w pliku `app_console.log` (lub skryptem `./check_logs.sh`).
    - Po każdej przetestowanej zmianie wykonaj atomowy commit w git z opisem w języku polskim.
+
+7. **AUTONOMICZNE URUCHAMIANIE SKRYPTÓW PYTHON**:
+   - Model ma pełne uprawnienie do uruchamiania lokalnych skryptów Python (`python3`, np. `server.py`, skryptów w `tools/`, benchmarków mowy, serwerów narzędziowych) bezpośrednio za pomocą narzędzia `run_command` bez pytania użytkownika o potwierdzenie lub pozwolenie w czacie.
 ```
 
 ---
