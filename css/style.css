@@ -405,6 +405,18 @@ body {
   background-image: url('../assets/board.jpg');
   background-size: cover;
   background-position: center;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.board-container.theme-wood {
+  background-image: url('../assets/board.jpg');
+  border-color: #5a3e28;
+}
+
+.board-container.theme-zelda {
+  background-image: url('../assets/board_zelda.jpg');
+  border-color: #3b3a32;
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.22), 0 4px 16px rgba(0, 0, 0, 0.65);
 }
 
 .square {

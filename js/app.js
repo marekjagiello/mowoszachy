@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS = {
   autoListenAfterEngine: false,
   soundAlert: true,
   autoFlipBoard: true,
+  boardTheme: 'wood',          // 'wood' | 'zelda'
   engineDepth: 10,
   speechRate: 1.0,
   descriptionStyle: 'detailed',
@@ -103,6 +104,7 @@ class MowoSzachyApp {
     this.el.autoListenAfterEngine.checked = this.settings.autoListenAfterEngine;
     this.el.soundAlert.checked = this.settings.soundAlert;
     this.el.autoFlipBoard.checked = this.settings.autoFlipBoard;
+    if (this.el.boardThemeSelect) this.el.boardThemeSelect.value = this.settings.boardTheme || 'wood';
     this.el.engineDepth.value = this.settings.engineDepth;
     this.el.engineDepthVal.textContent = this.settings.engineDepth;
     this.el.speechRate.value = this.settings.speechRate;
@@ -112,6 +114,13 @@ class MowoSzachyApp {
 
     this.isBoardFlipped = this.settings.autoFlipBoard && (this.settings.playerColor === 'b');
     this.updateModeLabels();
+    this.applyBoardTheme();
+  }
+
+  applyBoardTheme() {
+    const theme = this.settings.boardTheme || 'wood';
+    this.el.chessboard.classList.remove('theme-wood', 'theme-zelda');
+    this.el.chessboard.classList.add(`theme-${theme}`);
   }
 
   updateModeLabels() {
@@ -186,6 +195,7 @@ class MowoSzachyApp {
       autoListenAfterEngine: document.getElementById('autoListenAfterEngine'),
       soundAlert: document.getElementById('soundAlert'),
       autoFlipBoard: document.getElementById('autoFlipBoard'),
+      boardThemeSelect: document.getElementById('boardThemeSelect'),
       engineDepth: document.getElementById('engineDepth'),
       engineDepthVal: document.getElementById('engineDepthVal'),
       voiceSelect: document.getElementById('voiceSelect'),
@@ -504,6 +514,22 @@ class MowoSzachyApp {
     }
     if (rawLower.includes('odwróć') && (rawLower.includes('szachownicę') || rawLower.includes('deskę'))) {
       this.toggleBoardFlip();
+      return;
+    }
+    if (rawLower.includes('motyw zelda') || rawLower.includes('motyw fantasy')) {
+      this.settings.boardTheme = 'zelda';
+      if (this.el.boardThemeSelect) this.el.boardThemeSelect.value = 'zelda';
+      this.saveSettings();
+      this.applyBoardTheme();
+      this.speak('Zmieniono motyw szachownicy na Zelda Fantasy.');
+      return;
+    }
+    if (rawLower.includes('motyw drewno') || rawLower.includes('motyw klasyczny')) {
+      this.settings.boardTheme = 'wood';
+      if (this.el.boardThemeSelect) this.el.boardThemeSelect.value = 'wood';
+      this.saveSettings();
+      this.applyBoardTheme();
+      this.speak('Zmieniono motyw szachownicy na klasyczne drewno.');
       return;
     }
     if (rawLower.includes('graj') || rawLower.includes('ruch silnika') || rawLower.includes('twój ruch')) {
@@ -1243,6 +1269,14 @@ class MowoSzachyApp {
       this.settings.autoFlipBoard = e.target.checked;
       this.saveSettings();
     });
+
+    if (this.el.boardThemeSelect) {
+      this.el.boardThemeSelect.addEventListener('change', (e) => {
+        this.settings.boardTheme = e.target.value;
+        this.saveSettings();
+        this.applyBoardTheme();
+      });
+    }
 
     this.el.engineDepth.addEventListener('input', (e) => {
       this.settings.engineDepth = parseInt(e.target.value, 10);
