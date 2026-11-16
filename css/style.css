@@ -1095,6 +1095,160 @@ body {
 }
 
 /* ==========================================================================
+   Stockfish Engine & Elo Difficulty Controls (Mobile-First Ergonomics)
+   ========================================================================== */
+.elo-header,
+.depth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.elo-title,
+.depth-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.elo-badge {
+  background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  color: #ffffff;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+  min-width: 76px;
+  text-align: center;
+}
+
+.depth-badge {
+  background: #1e293b;
+  border: 1px solid var(--border-color);
+  color: #93c5fd;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.elo-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: -2px;
+  margin-bottom: 6px;
+  padding: 0 2px;
+}
+
+.elo-meta-row strong {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.elo-skill-equiv {
+  font-size: 0.76rem;
+  color: #94a3b8;
+}
+
+.elo-slider,
+.depth-slider {
+  width: 100%;
+  height: 40px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+  touch-action: pan-y;
+}
+
+.elo-presets-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.elo-presets-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.elo-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+@media (min-width: 480px) {
+  .elo-presets-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.btn-elo-preset {
+  background: var(--bg-accent);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  min-height: 48px;
+  min-width: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.btn-elo-preset span.preset-elo {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.btn-elo-preset span.preset-name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.btn-elo-preset:hover,
+.btn-elo-preset:active {
+  background: var(--primary);
+  border-color: var(--primary-hover);
+  color: #ffffff;
+}
+
+.btn-elo-preset:hover span.preset-name,
+.btn-elo-preset:active span.preset-name {
+  color: #e0f2fe;
+}
+
+.btn-elo-preset.active {
+  background: #1d4ed8;
+  border-color: #60a5fa;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+.btn-elo-preset.active span.preset-name {
+  color: #bfdbfe;
+  font-weight: 600;
+}
+
+/* ==========================================================================
    Fullscreen Chessboard Mode (Mobile-First Touch Ergonomics)
    ========================================================================== */
 .accordion-header-title {

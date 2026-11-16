@@ -42,12 +42,13 @@ const DEFAULT_SETTINGS = {
   pieceGlowWhiteOpacity: 85,   // 0 - 100 % (optymalna)
   pieceGlowBlackSize: 5,       // 0 - 15 px (optymalna)
   pieceGlowBlackOpacity: 85,   // 0 - 100 % (optymalna)
-  engineDepth: 10,
+  engineElo: 1500,             // 800 - 2800 ELO (domyślnie 1500 Klubowy)
+  engineDepth: 10,             // 2 - 18 półruchów
   speechRate: 1.0,
   descriptionStyle: 'detailed',
   autoSpeakEngine: true,
   voiceIndex: -1,
-  settingsVersion: 3
+  settingsVersion: 4
 };
 
 class MowoSzachyApp {
@@ -98,14 +99,16 @@ class MowoSzachyApp {
       const stored = localStorage.getItem('mowoszachy_settings');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.settingsVersion !== 3) {
+        if (parsed.settingsVersion !== 4) {
           if (parsed.boardBgOpacity === undefined) parsed.boardBgOpacity = 50;
           if (parsed.pieceGlowWhiteSize === undefined) parsed.pieceGlowWhiteSize = 5;
           if (parsed.pieceGlowWhiteOpacity === undefined) parsed.pieceGlowWhiteOpacity = 85;
           if (parsed.pieceGlowBlackSize === undefined) parsed.pieceGlowBlackSize = 5;
           if (parsed.pieceGlowBlackOpacity === undefined) parsed.pieceGlowBlackOpacity = 85;
           if (!parsed.botName) parsed.botName = 'Janusz';
-          parsed.settingsVersion = 3;
+          if (parsed.engineElo === undefined) parsed.engineElo = 1500;
+          if (parsed.engineDepth === undefined) parsed.engineDepth = 10;
+          parsed.settingsVersion = 4;
         }
         return { ...DEFAULT_SETTINGS, ...parsed };
       }
@@ -134,6 +137,12 @@ class MowoSzachyApp {
     this.el.soundAlert.checked = this.settings.soundAlert;
     this.el.autoFlipBoard.checked = this.settings.autoFlipBoard;
     if (this.el.boardThemeSelect) this.el.boardThemeSelect.value = this.settings.boardTheme || 'wood';
+    
+    const elo = this.settings.engineElo !== undefined ? this.settings.engineElo : 1500;
+    if (this.el.engineElo) this.el.engineElo.value = elo;
+    this.updateEloDisplay(elo);
+    this.updateEloPresetButtons(elo);
+
     this.el.engineDepth.value = this.settings.engineDepth;
     this.el.engineDepthVal.textContent = this.settings.engineDepth;
     this.el.speechRate.value = this.settings.speechRate;
@@ -249,14 +258,93 @@ class MowoSzachyApp {
       const sideName = this.settings.playerColor === 'w' ? 'Białe' : 'Czarne';
       const engineSide = this.settings.playerColor === 'w' ? 'Czarne' : 'Białe';
       const botName = this.settings.botName || 'Janusz';
-      this.el.modeLabelText.textContent = `Gracz (${sideName}) vs ${botName} (${engineSide})`;
+      const elo = this.settings.engineElo || 1500;
+      this.el.modeLabelText.textContent = `Gracz (${sideName}) vs ${botName} (${elo} ELO)`;
+      if (this.el.modePill) {
+        this.el.modePill.title = `Tryb: Gracz vs Silnik ${botName} (${elo} ELO, ${this.getEloCategory(elo)}, głębokość ${this.settings.engineDepth})`;
+      }
       this.el.sideLabel.textContent = `Gram: ${sideName}`;
       this.el.sideIcon.textContent = this.settings.playerColor === 'w' ? '⚪' : '⚫';
     } else {
       this.el.modeLabelText.textContent = 'Tryb: Dwóch graczy / Analiza';
+      if (this.el.modePill) {
+        this.el.modePill.title = 'Tryb dwóch graczy lub swobodnej analizy pozycji';
+      }
       this.el.sideLabel.textContent = 'Analiza';
       this.el.sideIcon.textContent = '🔍';
     }
+  }
+
+  // --- Bot Strength (ELO & Stockfish Skill Level) Helpers ---
+  getEloCategory(elo) {
+    if (elo < 1000) return 'Początkujący';
+    if (elo < 1200) return 'Nowicjusz';
+    if (elo < 1400) return 'Amator';
+    if (elo < 1600) return 'Klubowy';
+    if (elo < 1800) return 'Zaawansowany';
+    if (elo < 2000) return 'Ekspert (I kat.)';
+    if (elo < 2200) return 'Kandydat na mistrza';
+    if (elo < 2400) return 'Mistrz krajowy';
+    if (elo < 2600) return 'Mistrz międzynarodowy';
+    return 'Arcymistrz (GM)';
+  }
+
+  getSkillLevelFromElo(elo) {
+    // Stockfish Skill Level ranges from 0 to 20
+    // Elo 800 maps to Skill Level 0, Elo 2800 maps to Skill Level 20
+    const clamped = Math.max(800, Math.min(2800, elo));
+    return Math.round((clamped - 800) / 100);
+  }
+
+  updateEloDisplay(elo) {
+    if (this.el.engineEloVal) {
+      this.el.engineEloVal.textContent = elo;
+    }
+    if (this.el.engineEloCategory) {
+      this.el.engineEloCategory.textContent = this.getEloCategory(elo);
+    }
+    if (this.el.engineSkillVal) {
+      this.el.engineSkillVal.textContent = this.getSkillLevelFromElo(elo);
+    }
+  }
+
+  updateEloPresetButtons(elo) {
+    if (!this.el.eloPresetButtons) return;
+    this.el.eloPresetButtons.forEach(btn => {
+      const btnElo = parseInt(btn.dataset.elo, 10);
+      if (btnElo === elo) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  applyEngineStrength() {
+    if (!this.stockfish) return;
+    const elo = this.settings.engineElo || 1500;
+    const skillLevel = this.getSkillLevelFromElo(elo);
+    try {
+      this.stockfish.postMessage(`setoption name Skill Level value ${skillLevel}`);
+      this.stockfish.postMessage(`setoption name UCI_LimitStrength value ${elo < 2800 ? 'true' : 'false'}`);
+      this.stockfish.postMessage(`setoption name UCI_Elo value ${elo}`);
+      remoteLog('INFO', `Engine strength set to ELO ${elo} (Skill Level ${skillLevel}/20, Depth ${this.settings.engineDepth})`);
+    } catch (e) {
+      remoteLog('WARN', 'Failed to apply engine strength: ' + e.message);
+    }
+  }
+
+  setEloAndDepth(elo, depth) {
+    this.settings.engineElo = elo;
+    if (depth !== undefined && !isNaN(depth)) {
+      this.settings.engineDepth = depth;
+    }
+    this.syncSettingsToUI();
+    this.applyEngineStrength();
+    this.updateModeLabels();
+    this.saveSettings();
+    const cat = this.getEloCategory(elo);
+    this.speak(`Ustawiono mój ranking na ${elo} ELO, poziom ${cat}, a głębokość myślenia na ${this.settings.engineDepth} półruchów.`);
   }
 
   isGameOver() {
@@ -337,8 +425,15 @@ class MowoSzachyApp {
       soundAlert: document.getElementById('soundAlert'),
       autoFlipBoard: document.getElementById('autoFlipBoard'),
       boardThemeSelect: document.getElementById('boardThemeSelect'),
+      engineElo: document.getElementById('engineElo'),
+      engineEloVal: document.getElementById('engineEloVal'),
+      engineEloBadge: document.getElementById('engineEloBadge'),
+      engineEloCategory: document.getElementById('engineEloCategory'),
+      engineSkillVal: document.getElementById('engineSkillVal'),
+      eloPresetButtons: document.querySelectorAll('.btn-elo-preset'),
       engineDepth: document.getElementById('engineDepth'),
       engineDepthVal: document.getElementById('engineDepthVal'),
+      engineDepthBadge: document.getElementById('engineDepthBadge'),
       voiceSelect: document.getElementById('voiceSelect'),
       speechRate: document.getElementById('speechRate'),
       speechRateVal: document.getElementById('speechRateVal'),
@@ -859,6 +954,58 @@ class MowoSzachyApp {
       this.speak('Zmieniono motyw szachownicy na szmaragdowy leśny.');
       return;
     }
+
+    // Pytanie o poziom / ranking / ELO
+    if (
+      rawLower.includes('jaki masz poziom') ||
+      rawLower.includes('jaki poziom') ||
+      rawLower.includes('jakie masz elo') ||
+      rawLower.includes('jaki masz ranking') ||
+      rawLower.includes('jaki ranking') ||
+      rawLower.includes('jakie elo')
+    ) {
+      const elo = this.settings.engineElo || 1500;
+      const cat = this.getEloCategory(elo);
+      const depth = this.settings.engineDepth || 10;
+      this.speak(`Mój aktualny ranking to ${elo} ELO, poziom ${cat}, a głębokość myślenia to ${depth} półruchów.`);
+      return;
+    }
+
+    // Słowne ustawienie trudności
+    if (rawLower.includes('poziom początkujący')) {
+      this.setEloAndDepth(800, 4);
+      return;
+    }
+    if (rawLower.includes('poziom amator') || rawLower.includes('poziom nowicjusz')) {
+      this.setEloAndDepth(1200, 6);
+      return;
+    }
+    if (rawLower.includes('poziom klubowy') || rawLower.includes('poziom średni')) {
+      this.setEloAndDepth(1500, 10);
+      return;
+    }
+    if (rawLower.includes('poziom zaawansowany') || rawLower.includes('poziom ekspert')) {
+      this.setEloAndDepth(1800, 12);
+      return;
+    }
+    if (rawLower.includes('poziom mistrz') && !rawLower.includes('arcymistrz')) {
+      this.setEloAndDepth(2200, 14);
+      return;
+    }
+    if (rawLower.includes('poziom arcymistrz') || rawLower.includes('poziom maksymalny') || rawLower.includes('poziom maks')) {
+      this.setEloAndDepth(2800, 18);
+      return;
+    }
+
+    // Ustawienie ELO liczbowo (np. "ustaw elo 1600", "poziom 1400", "ranking 2000")
+    const setEloMatch = rawLower.match(/(?:ustaw|zmień)?\s*(?:poziom|ranking|elo)\s*(?:na)?\s*(\d{3,4})/i);
+    if (setEloMatch) {
+      const targetElo = parseInt(setEloMatch[1], 10);
+      if (targetElo >= 800 && targetElo <= 2800) {
+        this.setEloAndDepth(targetElo);
+        return;
+      }
+    }
     if (rawLower.includes('graj') || rawLower.includes('ruch silnika') || rawLower.includes('twój ruch')) {
       this.playEngineMove();
       return;
@@ -975,6 +1122,7 @@ class MowoSzachyApp {
         this.handleEngineMessage(event.data);
       };
       this.stockfish.postMessage('uci');
+      this.applyEngineStrength();
       this.stockfish.postMessage('isready');
     } catch (e) {
       remoteLog('ERROR', 'Failed to load Stockfish worker: ' + e.message);
@@ -988,8 +1136,12 @@ class MowoSzachyApp {
 
     if (line === 'readyok' || line.includes('id name Stockfish')) {
       this.stockfishReady = true;
+      this.applyEngineStrength();
       this.el.engineStatus.querySelector('.status-dot').className = 'status-dot';
       this.el.engineStatus.querySelector('.status-text').textContent = 'Stockfish';
+      if (this.el.engineStatus) {
+        this.el.engineStatus.title = `Stan silnika Stockfish (${this.settings.engineElo || 1500} ELO)`;
+      }
 
       if (typeof this.engineOnReadyCallback === 'function') {
         const cb = this.engineOnReadyCallback;
@@ -1273,6 +1425,7 @@ class MowoSzachyApp {
       this.setSpeechIndicator(true, 'Silnik myśli...');
       this.el.engineEvalText.textContent = 'Ocena: obliczanie...';
 
+      this.applyEngineStrength();
       this.stockfish.postMessage(`position fen ${currentFen}`);
       this.stockfish.postMessage(`go depth ${this.settings.engineDepth}`);
     });
@@ -1564,6 +1717,7 @@ class MowoSzachyApp {
 
     if (this.stockfishReady) {
       this.stockfish.postMessage('ucinewgame');
+      this.applyEngineStrength();
     }
 
     this.updateModeLabels();
@@ -2124,11 +2278,51 @@ class MowoSzachyApp {
       });
     });
 
-    this.el.engineDepth.addEventListener('input', (e) => {
-      this.settings.engineDepth = parseInt(e.target.value, 10);
-      this.el.engineDepthVal.textContent = this.settings.engineDepth;
-      this.saveSettings();
-    });
+    // Stockfish Engine ELO & Depth Controls
+    if (this.el.engineElo) {
+      this.el.engineElo.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        this.settings.engineElo = val;
+        this.updateEloDisplay(val);
+        this.updateEloPresetButtons(val);
+        this.updateModeLabels();
+        this.applyEngineStrength();
+        this.saveSettings();
+      });
+    }
+
+    if (this.el.eloPresetButtons) {
+      this.el.eloPresetButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const elo = parseInt(btn.dataset.elo, 10);
+          const depth = parseInt(btn.dataset.depth, 10);
+          this.settings.engineElo = elo;
+          if (this.el.engineElo) this.el.engineElo.value = elo;
+          this.updateEloDisplay(elo);
+          this.updateEloPresetButtons(elo);
+
+          if (!isNaN(depth)) {
+            this.settings.engineDepth = depth;
+            if (this.el.engineDepth) this.el.engineDepth.value = depth;
+            if (this.el.engineDepthVal) this.el.engineDepthVal.textContent = depth;
+          }
+
+          this.updateModeLabels();
+          this.applyEngineStrength();
+          this.saveSettings();
+        });
+      });
+    }
+
+    if (this.el.engineDepth) {
+      this.el.engineDepth.addEventListener('input', (e) => {
+        this.settings.engineDepth = parseInt(e.target.value, 10);
+        this.el.engineDepthVal.textContent = this.settings.engineDepth;
+        this.updateModeLabels();
+        this.applyEngineStrength();
+        this.saveSettings();
+      });
+    }
 
     this.el.speechRate.addEventListener('input', (e) => {
       this.settings.speechRate = parseFloat(e.target.value);

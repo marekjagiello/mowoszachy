@@ -395,11 +395,68 @@
       <!-- Silnik Stockfish -->
       <div class="settings-section-title">Silnik szachowy Stockfish</div>
 
+      <!-- Poziom bota (Ranking ELO) -->
       <div class="setting-group">
-        <label for="engineDepth">Siła silnika (Głębokość analizy: <span id="engineDepthVal">10</span>):</label>
-        <div class="setting-control">
-          <input type="range" id="engineDepth" min="2" max="18" step="1" value="10">
+        <div class="elo-header">
+          <label for="engineElo" class="elo-title">
+            <span>Siła bota (Ranking ELO):</span>
+            <span id="engineEloBadge" class="elo-badge"><span id="engineEloVal">1500</span> ELO</span>
+          </label>
         </div>
+        <div class="setting-control">
+          <input type="range" id="engineElo" min="800" max="2800" step="50" value="1500" class="elo-slider" aria-label="Ranking ELO bota Stockfish">
+        </div>
+        <div class="elo-meta-row">
+          <span class="elo-level-label">Poziom: <strong id="engineEloCategory">Klubowy</strong></span>
+          <span class="elo-skill-equiv">(Skill Level: <span id="engineSkillVal">7</span>/20)</span>
+        </div>
+
+        <!-- Szybkie presety ELO -->
+        <div class="elo-presets-section">
+          <span class="elo-presets-label">Szybkie poziomy trudności:</span>
+          <div class="elo-presets-grid">
+            <button type="button" class="btn-elo-preset" data-elo="800" data-depth="4">
+              <span class="preset-elo">800</span>
+              <span class="preset-name">Początkujący</span>
+            </button>
+            <button type="button" class="btn-elo-preset" data-elo="1200" data-depth="6">
+              <span class="preset-elo">1200</span>
+              <span class="preset-name">Amator</span>
+            </button>
+            <button type="button" class="btn-elo-preset active" data-elo="1500" data-depth="10">
+              <span class="preset-elo">1500</span>
+              <span class="preset-name">Klubowy</span>
+            </button>
+            <button type="button" class="btn-elo-preset" data-elo="1800" data-depth="12">
+              <span class="preset-elo">1800</span>
+              <span class="preset-name">Zaawansowany</span>
+            </button>
+            <button type="button" class="btn-elo-preset" data-elo="2200" data-depth="14">
+              <span class="preset-elo">2200</span>
+              <span class="preset-name">Mistrz</span>
+            </button>
+            <button type="button" class="btn-elo-preset" data-elo="2800" data-depth="18">
+              <span class="preset-elo">2800</span>
+              <span class="preset-name">Arcymistrz</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Głębokość myślenia (tuż obok) -->
+      <div class="setting-group">
+        <div class="depth-header">
+          <label for="engineDepth" class="depth-title">
+            <span>Głębokość myślenia silnika:</span>
+            <span id="engineDepthBadge" class="depth-badge"><span id="engineDepthVal">10</span> półruchów</span>
+          </label>
+        </div>
+        <div class="setting-control">
+          <input type="range" id="engineDepth" min="2" max="18" step="1" value="10" class="depth-slider" aria-label="Głębokość analizy silnika">
+        </div>
+        <p class="setting-subtext">
+          Głębokość określa ile półruchów do przodu Stockfish analizuje warianty (domyślnie 10). Wyższa wartość = dokładniejsze liczenie, ale nieco dłuższy czas namysłu na telefonie.
+        </p>
       </div>
 
       <!-- Mowa i Lektor -->
