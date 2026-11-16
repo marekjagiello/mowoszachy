@@ -87,12 +87,16 @@ def handle_request(req):
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
 
     if method == "tools/call":
-        params = req.get("params") or {}
+        params = req.get("params") if isinstance(req.get("params"), dict) else {}
         name = params.get("name")
-        args = params.get("arguments") or {}
+        args = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
 
         if name == "read_app_log":
-            count = args.get("lines", 50)
+            raw_lines = args.get("lines")
+            try:
+                count = int(raw_lines) if raw_lines is not None else 50
+            except (ValueError, TypeError):
+                count = 50
             log_path = get_log_path()
             if not os.path.exists(log_path):
                 content = "(app_console.log does not exist yet - no logs recorded)"
@@ -128,7 +132,11 @@ def handle_request(req):
             }
 
         if name == "get_server_status":
-            port = args.get("port", 8000)
+            raw_port = args.get("port")
+            try:
+                port = int(raw_port) if raw_port is not None else 8000
+            except (ValueError, TypeError):
+                port = 8000
             url = f"http://localhost:{port}/"
             try:
                 req_obj = urllib.request.Request(url, method="HEAD")

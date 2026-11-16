@@ -457,8 +457,8 @@ class MowoSzachyApp {
     text = text.replace(/\broszada\b/g, 'O-O');
 
     // Piece names
-    text = text.replace(/\b(skoczek|skoczka|skoczkiem|koń|konia|koniem)\b/g, 'N');
-    text = text.replace(/\b(goniec|gońca|gońcem|laufer|laufra)\b/g, 'B');
+    text = text.replace(/\b(skoczek|skoczka|skoczkiem|koń|konia|koniem|kucyk|kucyka|kucykiem)\b/g, 'N');
+    text = text.replace(/\b(goniec|gońca|gońcem|laufer|laufra|laufrem)\b/g, 'B');
     text = text.replace(/\b(wieża|wieżę|wieżą|wieze)\b/g, 'R');
     text = text.replace(/\b(hetman|hetmana|hetmanem|królowa|królową|dama|damę|damą)\b/g, 'Q');
     text = text.replace(/\b(król|króla|królem)\b/g, 'K');

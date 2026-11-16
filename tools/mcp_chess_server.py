@@ -66,12 +66,13 @@ def handle_request(req):
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
 
     if method == "tools/call":
-        params = req.get("params") or {}
+        params = req.get("params") if isinstance(req.get("params"), dict) else {}
         name = params.get("name")
-        args = params.get("arguments") or {}
+        args = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
 
         if name == "validate_fen":
-            fen = args.get("fen", "")
+            raw_fen = args.get("fen")
+            fen = raw_fen.strip() if isinstance(raw_fen, str) else ""
             parts = fen.split()
             is_valid = len(parts) >= 4 and len(parts[0].split('/')) == 8
             return {
@@ -91,7 +92,8 @@ def handle_request(req):
             }
 
         if name == "describe_fen_pl":
-            fen = args.get("fen", "")
+            raw_fen = args.get("fen")
+            fen = raw_fen.strip() if isinstance(raw_fen, str) else ""
             parts = fen.split()
             turn_pl = "Ruch mają czarne." if len(parts) > 1 and parts[1] == 'b' else "Ruch mają białe."
             return {

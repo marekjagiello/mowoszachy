@@ -186,8 +186,8 @@ def normalize_polish_speech(raw: str) -> str:
     text = re.sub(r'\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b', 'O-O', text)
     text = re.sub(r'\broszada\b', 'O-O', text)
     
-    text = re.sub(r'\b(skoczek|skoczka|skoczkiem|koń|konia|koniem)\b', 'N', text)
-    text = re.sub(r'\b(goniec|gońca|gońcem|laufer|laufra)\b', 'B', text)
+    text = re.sub(r'\b(skoczek|skoczka|skoczkiem|koń|konia|koniem|kucyk|kucyka|kucykiem)\b', 'N', text)
+    text = re.sub(r'\b(goniec|gońca|gońcem|laufer|laufra|laufrem)\b', 'B', text)
     text = re.sub(r'\b(wieża|wieżę|wieżą|wieze)\b', 'R', text)
     text = re.sub(r'\b(hetman|hetmana|hetmanem|królowa|królową|dama|damę|damą)\b', 'Q', text)
     text = re.sub(r'\b(król|króla|królem)\b', 'K', text)
@@ -203,7 +203,9 @@ TEST_CASES = [
     ("Pion na e4", "P e4"),
     ("skoczek na f3", "N f3"),
     ("koń na f3", "N f3"),
+    ("kucyk na f3", "N f3"),
     ("laufer na c4", "B c4"),
+    ("laufrem na c4", "B c4"),
     ("goniec bije na d5", "B x d5"),
     ("krótka roszada", "O-O"),
     ("długa roszada", "O-O-O"),
@@ -505,12 +507,13 @@ def handle_request(req):
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
 
     if method == "tools/call":
-        params = req.get("params") or {}
+        params = req.get("params") if isinstance(req.get("params"), dict) else {}
         name = params.get("name")
-        args = params.get("arguments") or {}
+        args = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
 
         if name == "validate_fen":
-            fen = args.get("fen", "")
+            raw_fen = args.get("fen")
+            fen = raw_fen.strip() if isinstance(raw_fen, str) else ""
             parts = fen.split()
             is_valid = len(parts) >= 4 and len(parts[0].split('/')) == 8
             return {
@@ -530,7 +533,8 @@ def handle_request(req):
             }
 
         if name == "describe_fen_pl":
-            fen = args.get("fen", "")
+            raw_fen = args.get("fen")
+            fen = raw_fen.strip() if isinstance(raw_fen, str) else ""
             parts = fen.split()
             turn_pl = "Ruch mają czarne." if len(parts) > 1 and parts[1] == 'b' else "Ruch mają białe."
             return {
@@ -600,6 +604,7 @@ import sys
 import json
 import os
 import urllib.request
+import urllib.error
 
 TOOLS = [
     {
@@ -667,12 +672,16 @@ def handle_request(req):
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
 
     if method == "tools/call":
-        params = req.get("params") or {}
+        params = req.get("params") if isinstance(req.get("params"), dict) else {}
         name = params.get("name")
-        args = params.get("arguments") or {}
+        args = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
 
         if name == "read_app_log":
-            count = args.get("lines", 50)
+            raw_lines = args.get("lines")
+            try:
+                count = int(raw_lines) if raw_lines is not None else 50
+            except (ValueError, TypeError):
+                count = 50
             log_path = get_log_path()
             if not os.path.exists(log_path):
                 content = "(app_console.log does not exist yet - no logs recorded)"
@@ -708,7 +717,11 @@ def handle_request(req):
             }
 
         if name == "get_server_status":
-            port = args.get("port", 8000)
+            raw_port = args.get("port")
+            try:
+                port = int(raw_port) if raw_port is not None else 8000
+            except (ValueError, TypeError):
+                port = 8000
             url = f"http://localhost:{port}/"
             try:
                 req_obj = urllib.request.Request(url, method="HEAD")
@@ -885,7 +898,7 @@ def check():
         print("\nMowoSzachy wymaga czystego HTML5/CSS3/ES Modules bez narzędzi npm.")
         sys.exit(1)
     else:
-        print("[✓] Zero-Build Guard: Brak zabronionych artefaktów.")
+        print("[✓] Zero-Build Guard: Brak zabronionych artefaktów (czyste ES Modules zachowane).")
         sys.exit(0)
 
 if __name__ == '__main__':
@@ -899,7 +912,7 @@ Weryfikuje poprawność składniową plików `.py` oraz `.js` przy użyciu wbudo
 #!/usr/bin/env python3
 """
 tools/hooks/check_syntax.py
-Quick syntax checker for Python and vanilla JS files.
+Quick syntax checker for Python and vanilla JS files without requiring node/npm.
 """
 import os
 import sys
@@ -967,11 +980,10 @@ Skanuje plik `css/style.css` i sprawdza, czy kluczowe elementy interaktywne spe�
 #!/usr/bin/env python3
 """
 tools/hooks/check_mobile_targets.py
-Verifies mobile touch target requirements in CSS.
+Verifies mobile touch target requirements and CSS rules for physical chess training.
 """
 import os
 import sys
-import re
 
 def main():
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -984,9 +996,17 @@ def main():
     with open(css_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Verify that safe-area inset bottom is preserved
+    errors = []
     if 'safe-area-inset-bottom' not in content:
-        print("[!] OSTRZEŻENIE: Brak reguły env(safe-area-inset-bottom) w stylach CSS.")
+        errors.append("Brak reguły env(safe-area-inset-bottom) w stylach CSS.")
+
+    if '--safe-bottom' not in content:
+        errors.append("Brak zmiennej CSS --safe-bottom.")
+
+    if errors:
+        print("[!] BŁĄD AUDYTU MOBILNEGO:")
+        for e in errors:
+            print(f"    - {e}")
         sys.exit(1)
 
     print("[✓] Mobile Target Audit: Zgodność stylów CSS z wymaganiami mobilnymi potwierdzona.")
@@ -1019,6 +1039,7 @@ def main():
     with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
         lines = f.readlines()
 
+    # Look at last 50 lines for critical unhandled errors
     recent_lines = lines[-50:]
     critical_errors = []
     for line in recent_lines:
@@ -1029,6 +1050,7 @@ def main():
         print(f"[!] WYKRYTO {len(critical_errors)} BŁĘDÓW W LOGACH PRZEGLĄDARKI:")
         for err in critical_errors[-5:]:
             print(f"    -> {err}")
+        # Note: Do not hard exit non-zero if they are past historic errors, but alert
         print("[!] Proszę zweryfikować stan aplikacji przed zakończeniem prac.")
     else:
         print("[✓] Log Check: Ostatnie wpisy w app_console.log nie zawierają błędów krytycznych.")
@@ -1062,7 +1084,7 @@ Wdrożenie powyższych rekomendacji podzielono na 4 logiczne fazy według kryter
 
 #### Faza 2: Skille Domenowe w Repozytorium (Tydzień 1)
 - [ ] **R2.1**: Utworzyć folder `.agents/skills/mowoszachy-speech-eval/` i zapisać plik `SKILL.md`.
-- [ ] **R2.2**: Utworzyć skrypt benchmarku fonetycznego `tools/test_speech_parser.py` i zweryfikować jego przejście na 14 bazowych przypadkach testowych (w tym roszady "zero zero" i "zero zero zero").
+- [ ] **R2.2**: Utworzyć skrypt benchmarku fonetycznego `tools/test_speech_parser.py` i zweryfikować jego przejście na 16 bazowych przypadkach testowych (w tym roszady "zero zero", "zero zero zero" oraz synonimy "kucyk" i "laufrem").
 - [ ] **R2.3**: Utworzyć folder `.agents/skills/mowoszachy-chess-logic/` i skonfigurować wytyczne walidacji Position Describer w `SKILL.md`.
 - [ ] **R2.4**: Utworzyć folder `.agents/skills/mowoszachy-mobile-audit/` z wytycznymi audytu pól dotykowych.
 

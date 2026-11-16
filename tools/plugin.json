@@ -1,7 +1,7 @@
 {
   "name": "mowoszachy-toolkit",
   "version": "1.0.0",
-  "description": "Narzędzia deweloperskie i strażnicy jakości dla asystenta fizycznych szachów MowoSzachy.",
+  "description": "Zestaw narzędzi deweloperskich i strażników jakości dla asystenta fizycznych szachów MowoSzachy.",
   "skills": [
     ".agents/skills/mowoszachy-speech-eval",
     ".agents/skills/mowoszachy-chess-logic",

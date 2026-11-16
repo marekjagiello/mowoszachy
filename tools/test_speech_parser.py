@@ -39,8 +39,8 @@ def normalize_polish_speech(raw: str) -> str:
     text = re.sub(r'\b(krótka roszada|mała roszada|roszada krótka|roszada mała|zero zero)\b', 'O-O', text)
     text = re.sub(r'\broszada\b', 'O-O', text)
     
-    text = re.sub(r'\b(skoczek|skoczka|skoczkiem|koń|konia|koniem)\b', 'N', text)
-    text = re.sub(r'\b(goniec|gońca|gońcem|laufer|laufra)\b', 'B', text)
+    text = re.sub(r'\b(skoczek|skoczka|skoczkiem|koń|konia|koniem|kucyk|kucyka|kucykiem)\b', 'N', text)
+    text = re.sub(r'\b(goniec|gońca|gońcem|laufer|laufra|laufrem)\b', 'B', text)
     text = re.sub(r'\b(wieża|wieżę|wieżą|wieze)\b', 'R', text)
     text = re.sub(r'\b(hetman|hetmana|hetmanem|królowa|królową|dama|damę|damą)\b', 'Q', text)
     text = re.sub(r'\b(król|króla|królem)\b', 'K', text)
@@ -56,7 +56,9 @@ TEST_CASES = [
     ("Pion na e4", "P e4"),
     ("skoczek na f3", "N f3"),
     ("koń na f3", "N f3"),
+    ("kucyk na f3", "N f3"),
     ("laufer na c4", "B c4"),
+    ("laufrem na c4", "B c4"),
     ("goniec bije na d5", "B x d5"),
     ("krótka roszada", "O-O"),
     ("długa roszada", "O-O-O"),
