@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>MowoSzachy - Trening Szachowy przez Mowę</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-icon">♞</span>
+      <h1 class="brand-title">MowoSzachy</h1>
+    </div>
+    <div class="header-actions">
+      <div id="engineStatus" class="status-chip" title="Stan silnika Stockfish">
+        <span class="status-dot loading"></span>
+        <span class="status-text">Silnik</span>
+      </div>
+      <div id="speechStatus" class="status-chip" title="Stan syntezatora mowy">
+        <span class="status-dot"></span>
+        <span class="status-text">Mowa</span>
+      </div>
+      <button id="btnOpenSettings" class="btn-icon" aria-label="Ustawienia" title="Ustawienia">⚙️</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Turn & State Banner -->
+    <section class="turn-banner" id="turnBanner">
+      <div class="turn-indicator">
+        <span id="turnMarker" class="piece-marker white"></span>
+        <span id="turnLabel">Ruch Białych</span>
+      </div>
+      <div class="game-meta">
+        <span id="moveCount">Ruch 1</span>
+        <span id="gameStatusText"></span>
+      </div>
+    </section>
+
+    <!-- Audio / Speech Main Display Card -->
+    <section class="speech-card">
+      <div class="speech-status-bar">
+        <span id="speechStateLabel">Gotowy do gry</span>
+        <div class="speech-waves" id="speechWaves">
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+        </div>
+      </div>
+      <div class="speech-display-text" id="speechDisplayText">
+        Ustaw figury na fizycznej szachownicy i powiedz lub wybierz ruch.
+      </div>
+      <div class="speech-display-sub">
+        <span id="lastMoveText">Ostatni ruch: —</span>
+        <span id="engineEvalText">Ocena: 0.0</span>
+      </div>
+    </section>
+
+    <!-- Main Mobile Actions -->
+    <section class="actions-grid">
+      <button id="btnReadPosition" class="btn-action primary" title="Przeczytaj całą pozycję na głos">
+        <span class="btn-icon-large">🔊</span>
+        <span>Przeczytaj całą pozycję</span>
+      </button>
+
+      <button id="btnVoiceInput" class="btn-action" title="Powiedz ruch do mikrofonu">
+        <span class="btn-icon-large">🎤</span>
+        <span id="voiceBtnLabel">Powiedz ruch</span>
+      </button>
+
+      <button id="btnPlayEngineMove" class="btn-action" title="Niech silnik Stockfish zagra ruch">
+        <span class="btn-icon-large">🤖</span>
+        <span>Ruch silnika</span>
+      </button>
+
+      <button id="btnReadHint" class="btn-action" title="Podpowiedź najlepszego ruchu">
+        <span class="btn-icon-large">💡</span>
+        <span>Podpowiedź ruchu</span>
+      </button>
+
+      <button id="btnReadLastMove" class="btn-action" title="Powtórz ostatni ruch">
+        <span class="btn-icon-large">📢</span>
+        <span>Powtórz ruch</span>
+      </button>
+    </section>
+
+    <!-- Manual input fallback -->
+    <div class="manual-input-box">
+      <input type="text" id="manualMoveInput" placeholder="Wpisz ruch (np. e4, Nf3, O-O)..." autocomplete="off" autocorrect="off" autocapitalize="none">
+      <button id="btnSendManualMove" class="btn-send">Zagraj</button>
+    </div>
+
+    <!-- Collapsible Visual Board (Optional Check) -->
+    <section class="accordion-section" id="boardAccordion">
+      <div class="accordion-header" id="boardToggle">
+        <span>👁️ Podgląd szachownicy kontrolnej</span>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <div id="chessboard" class="board-container"></div>
+        <p style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+          Kliknij pole początkowe i docelowe lub używaj głosu
+        </p>
+      </div>
+    </section>
+
+    <!-- Bottom Auxiliary Bar -->
+    <div class="aux-bar">
+      <button id="btnUndoMove" class="btn-aux">
+        <span>⏪</span>
+        <span>Cofnij</span>
+      </button>
+      <button id="btnNewGame" class="btn-aux">
+        <span>🔄</span>
+        <span>Nowa partia</span>
+      </button>
+      <button id="btnCopyFen" class="btn-aux">
+        <span>📋</span>
+        <span>Kopiuj FEN</span>
+      </button>
+    </div>
+  </main>
+
+  <!-- Settings Modal Drawer -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3>Ustawienia MowoSzachów</h3>
+        <button id="btnCloseSettings" class="btn-icon">✕</button>
+      </div>
+
+      <div class="setting-group">
+        <label for="voiceSelect">Głos lektora (Polski TTS):</label>
+        <div class="setting-control">
+          <select id="voiceSelect"></select>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label for="speechRate">Tempo mowy (<span id="speechRateVal">1.0</span>x):</label>
+        <div class="setting-control">
+          <input type="range" id="speechRate" min="0.7" max="1.4" step="0.05" value="1.0">
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label for="engineDepth">Poziom trudności silnika (Głębokość <span id="engineDepthVal">10</span>):</label>
+        <div class="setting-control">
+          <input type="range" id="engineDepth" min="2" max="18" step="1" value="10">
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label for="descriptionStyle">Styl opisu pozycji:</label>
+        <div class="setting-control">
+          <select id="descriptionStyle">
+            <option value="detailed">Szczegółowy (po polsku: np. "Białe: Król na g1...")</option>
+            <option value="brief">Zwięzły (figury i pola: np. "Kg1, Wf1, e4")</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="autoSpeakEngineMove" checked>
+          <span>Automatycznie czytaj ruchy silnika</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
