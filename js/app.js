@@ -1886,8 +1886,9 @@ class MowoSzachyApp {
   // --- Visual Chess Board Renderer ---
   initBoardUI() {
     this.el.chessboard.innerHTML = '';
+    this.el.chessboard.classList.toggle('flipped', this.isBoardFlipped);
 
-    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const files = ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a'];
     const ranks = [8, 7, 6, 5, 4, 3, 2, 1];
 
     const activeFiles = this.isBoardFlipped ? [...files].reverse() : files;
@@ -1899,7 +1900,7 @@ class MowoSzachyApp {
         const file = activeFiles[fIdx];
         const squareId = `${file}${rank}`;
         const fileOrigIdx = file.charCodeAt(0) - 97;
-        const isLight = (fileOrigIdx + rank) % 2 !== 0;
+        const isLight = (fileOrigIdx + rank) % 2 === 0;
 
         const sq = document.createElement('div');
         sq.className = `square ${isLight ? 'light' : 'dark'}`;

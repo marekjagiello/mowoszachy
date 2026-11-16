@@ -515,6 +515,11 @@ body {
   pointer-events: none;
   z-index: 0;
   transition: opacity 0.05s ease;
+  transform: scaleX(-1);
+}
+
+.board-container.flipped::before {
+  transform: scaleY(-1);
 }
 
 .board-container.theme-wood {
@@ -621,6 +626,7 @@ body {
 .square .coord-file {
   bottom: 2px;
   right: 3px;
+  text-transform: uppercase;
 }
 
 .square .coord-rank {
